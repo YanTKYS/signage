@@ -763,6 +763,137 @@
             this.container.append(div);
           }
         }
+
+        const BASE_PROPERTY_FIELDS = [
+          ["位置とサイズ", "名前", "name", "text"],
+          ["位置とサイズ", "X", "x", "number"],
+          ["位置とサイズ", "Y", "y", "number"],
+          ["位置とサイズ", "幅", "w", "number"],
+          ["位置とサイズ", "高さ", "h", "number"],
+          ["位置とサイズ", "回転", "rot", "number"],
+          ["位置とサイズ", "透明度", "opacity", "number"],
+          ["表示", "ロック", "locked", "checkbox"],
+          ["表示", "表示", "visible", "checkbox"],
+        ];
+        const ALIGN_OPTIONS = [
+          ["left", "左"],
+          ["center", "中央"],
+          ["right", "右"],
+        ];
+        const FIT_OPTIONS = [
+          ["contain", "全体を表示"],
+          ["cover", "領域を埋める"],
+          ["fill", "引き伸ばす"],
+        ];
+        const PLAYER_FIT_OPTIONS = [
+          ["contain", "全体"],
+          ["cover", "埋める"],
+          ["fill", "引き伸ばす"],
+        ];
+        const PROPERTY_FIELDS_BY_TYPE = {
+          text: [
+            ["文字", "内容", "text", "textarea"],
+            ["文字", "サイズ", "style.fontSize", "number"],
+            ["文字", "太字", "style.bold", "checkbox"],
+            ["文字", "文字色", "style.color", "color"],
+            ["文字", "横揃え", "style.align", "select", ALIGN_OPTIONS],
+            [
+              "文字",
+              "縦揃え",
+              "style.valign",
+              "select",
+              [
+                ["top", "上"],
+                ["center", "中央"],
+                ["bottom", "下"],
+              ],
+            ],
+            ["背景と枠線", "背景色", "style.bgColor", "color"],
+            ["背景と枠線", "背景透明度", "style.bgAlpha", "number"],
+            ["背景と枠線", "余白", "style.pad", "number"],
+            ["背景と枠線", "枠線", "style.border", "checkbox"],
+            ["背景と枠線", "枠線色", "style.borderColor", "color"],
+            ["背景と枠線", "角丸", "style.radius", "number"],
+          ],
+          clock: [
+            [
+              "文字",
+              "形式",
+              "format",
+              "select",
+              [
+                ["HH:mm", "HH:mm"],
+                ["HH:mm:ss", "HH:mm:ss"],
+                ["yyyy年M月d日", "yyyy年M月d日"],
+                ["yyyy年M月d日（曜）", "yyyy年M月d日（曜）"],
+                ["datetime", "日付＋時刻"],
+              ],
+            ],
+            ["文字", "サイズ", "style.fontSize", "number"],
+            ["文字", "文字色", "style.color", "color"],
+            ["文字", "背景色", "style.bgColor", "color"],
+            ["文字", "背景透明度", "style.bgAlpha", "number"],
+            ["文字", "配置", "style.align", "select", ALIGN_OPTIONS],
+          ],
+          image: [
+            ["メディア", "ファイル名", "fileName", "readonly"],
+            ["メディア", "表示方法", "fit", "select", FIT_OPTIONS],
+            ["メディア", "縦横比維持", "keepRatio", "checkbox"],
+          ],
+          video: [
+            ["メディア", "ファイル名", "fileName", "readonly"],
+            ["メディア", "表示方法", "fit", "select", FIT_OPTIONS],
+            ["メディア", "縦横比維持", "keepRatio", "checkbox"],
+            ["再生", "繰り返し", "loop", "checkbox"],
+            ["再生", "ミュート", "muted", "checkbox"],
+            ["再生", "コントロール", "controls", "checkbox"],
+          ],
+          player: [
+            ["メディア", "フォルダ名", "folderName", "readonly"],
+            ["メディア", "画像数", "imageCount", "readonly"],
+            ["メディア", "動画数", "videoCount", "readonly"],
+            ["メディア", "合計件数", "totalCount", "readonly"],
+            ["メディア", "最終更新", "lastRefreshAt", "readonly"],
+            ["メディア", "状態", "lastRefreshStatus", "readonly"],
+            [
+              "再生",
+              "順番",
+              "order",
+              "select",
+              [
+                ["name", "ファイル名順"],
+                ["random", "ランダム"],
+              ],
+            ],
+            ["再生", "繰り返し", "repeat", "checkbox"],
+            ["再生", "画像秒数", "imageSeconds", "number"],
+            ["再生", "動画ミュート", "muted", "checkbox"],
+            ["再生", "表示方法", "fit", "select", PLAYER_FIT_OPTIONS],
+            ["詳細", "サブフォルダ", "subfolders", "checkbox"],
+            ["詳細", "自動更新", "autoRefresh", "checkbox"],
+            ["詳細", "更新分", "refreshMinutes", "number"],
+          ],
+          shape: [
+            [
+              "背景と枠線",
+              "形",
+              "shape",
+              "select",
+              [
+                ["rect", "長方形"],
+                ["round", "角丸長方形"],
+                ["line", "直線"],
+              ],
+            ],
+            ["背景と枠線", "塗り", "style.fill", "color"],
+            ["背景と枠線", "塗り透明度", "style.fillAlpha", "number"],
+            ["背景と枠線", "線色", "style.stroke", "color"],
+            ["背景と枠線", "線幅", "style.strokeWidth", "number"],
+            ["背景と枠線", "角丸", "style.radius", "number"],
+            ["背景と枠線", "直線太さ", "style.lineWidth", "number"],
+          ],
+        };
+
         class App {
           constructor() {
             this.db = new DBM();
@@ -1667,375 +1798,39 @@
               panel.textContent = "オブジェクトを選択してください。";
               return;
             }
-            for (const [section, label, path, type] of [
-              ["位置とサイズ", "名前", "name", "text"],
-              ["位置とサイズ", "X", "x", "number"],
-              ["位置とサイズ", "Y", "y", "number"],
-              ["位置とサイズ", "幅", "w", "number"],
-              ["位置とサイズ", "高さ", "h", "number"],
-              ["位置とサイズ", "回転", "rot", "number"],
-              ["位置とサイズ", "透明度", "opacity", "number"],
-              ["表示", "ロック", "locked", "checkbox"],
-              ["表示", "表示", "visible", "checkbox"],
-            ])
-              this.field(panel, section, label, path, type, objects);
+            this.renderFields(panel, BASE_PROPERTY_FIELDS, objects);
             if (objects.length > 1) return;
+
             const object = objects[0];
-            if (object.type === "text") {
-              this.field(panel, "文字", "内容", "text", "textarea", objects);
-              this.field(
-                panel,
-                "文字",
-                "サイズ",
-                "style.fontSize",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "太字",
-                "style.bold",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "文字色",
-                "style.color",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "横揃え",
-                "style.align",
-                "select",
-                objects,
-                [
-                  ["left", "左"],
-                  ["center", "中央"],
-                  ["right", "右"],
-                ],
-              );
-              this.field(
-                panel,
-                "文字",
-                "縦揃え",
-                "style.valign",
-                "select",
-                objects,
-                [
-                  ["top", "上"],
-                  ["center", "中央"],
-                  ["bottom", "下"],
-                ],
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "背景色",
-                "style.bgColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "背景透明度",
-                "style.bgAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "余白",
-                "style.pad",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "枠線",
-                "style.border",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "枠線色",
-                "style.borderColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "角丸",
-                "style.radius",
-                "number",
-                objects,
-              );
-            }
-            if (object.type === "clock") {
-              this.field(panel, "文字", "形式", "format", "select", objects, [
-                ["HH:mm", "HH:mm"],
-                ["HH:mm:ss", "HH:mm:ss"],
-                ["yyyy年M月d日", "yyyy年M月d日"],
-                ["yyyy年M月d日（曜）", "yyyy年M月d日（曜）"],
-                ["datetime", "日付＋時刻"],
-              ]);
-              this.field(
-                panel,
-                "文字",
-                "サイズ",
-                "style.fontSize",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "文字色",
-                "style.color",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "背景色",
-                "style.bgColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "背景透明度",
-                "style.bgAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "配置",
-                "style.align",
-                "select",
-                objects,
-                [
-                  ["left", "左"],
-                  ["center", "中央"],
-                  ["right", "右"],
-                ],
-              );
-            }
             if (object.type === "image" || object.type === "video") {
-              const b = document.createElement("button");
-              b.textContent = "ファイルを選択";
-              b.onclick = () => this.pickFile(object);
-              panel.append(b);
-              this.field(
-                panel,
-                "メディア",
-                "ファイル名",
-                "fileName",
-                "readonly",
-                objects,
-              );
-              this.field(
-                panel,
-                "メディア",
-                "表示方法",
-                "fit",
-                "select",
-                objects,
-                [
-                  ["contain", "全体を表示"],
-                  ["cover", "領域を埋める"],
-                  ["fill", "引き伸ばす"],
-                ],
-              );
-              this.field(
-                panel,
-                "メディア",
-                "縦横比維持",
-                "keepRatio",
-                "checkbox",
-                objects,
-              );
-              if (object.type === "video") {
-                this.field(
-                  panel,
-                  "再生",
-                  "繰り返し",
-                  "loop",
-                  "checkbox",
-                  objects,
-                );
-                this.field(
-                  panel,
-                  "再生",
-                  "ミュート",
-                  "muted",
-                  "checkbox",
-                  objects,
-                );
-                this.field(
-                  panel,
-                  "再生",
-                  "コントロール",
-                  "controls",
-                  "checkbox",
-                  objects,
-                );
-              }
+              this.button(panel, "ファイルを選択", () => this.pickFile(object));
             }
             if (object.type === "player") {
-              const b = document.createElement("button");
-              b.textContent = "フォルダを選択";
-              b.onclick = () => this.pickFolder(object);
-              panel.append(b);
-              for (const f of [
-                ["メディア", "フォルダ名", "folderName", "readonly"],
-                ["メディア", "画像数", "imageCount", "readonly"],
-                ["メディア", "動画数", "videoCount", "readonly"],
-                ["メディア", "合計件数", "totalCount", "readonly"],
-                ["メディア", "最終更新", "lastRefreshAt", "readonly"],
-                ["メディア", "状態", "lastRefreshStatus", "readonly"],
-              ])
-                this.field(panel, ...f, objects);
-              this.field(panel, "再生", "順番", "order", "select", objects, [
-                ["name", "ファイル名順"],
-                ["random", "ランダム"],
-              ]);
-              this.field(
-                panel,
-                "再生",
-                "繰り返し",
-                "repeat",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "再生",
-                "画像秒数",
-                "imageSeconds",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "再生",
-                "動画ミュート",
-                "muted",
-                "checkbox",
-                objects,
-              );
-              this.field(panel, "再生", "表示方法", "fit", "select", objects, [
-                ["contain", "全体"],
-                ["cover", "埋める"],
-                ["fill", "引き伸ばす"],
-              ]);
-              this.field(
-                panel,
-                "詳細",
-                "サブフォルダ",
-                "subfolders",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "詳細",
-                "自動更新",
-                "autoRefresh",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "詳細",
-                "更新分",
-                "refreshMinutes",
-                "number",
-                objects,
-              );
-              const r = document.createElement("button");
-              r.textContent = "手動更新";
-              r.onclick = () => this.refreshFolder(object);
-              panel.append(r);
-            }
-            if (object.type === "shape") {
-              this.field(
-                panel,
-                "背景と枠線",
-                "形",
-                "shape",
-                "select",
-                objects,
-                [
-                  ["rect", "長方形"],
-                  ["round", "角丸長方形"],
-                  ["line", "直線"],
-                ],
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "塗り",
-                "style.fill",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "塗り透明度",
-                "style.fillAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "線色",
-                "style.stroke",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "線幅",
-                "style.strokeWidth",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "角丸",
-                "style.radius",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "直線太さ",
-                "style.lineWidth",
-                "number",
-                objects,
+              this.button(panel, "フォルダを選択", () =>
+                this.pickFolder(object),
               );
             }
+            this.renderFields(
+              panel,
+              PROPERTY_FIELDS_BY_TYPE[object.type] || [],
+              objects,
+            );
+            if (object.type === "player") {
+              this.button(panel, "手動更新", () =>
+                this.refreshFolder(object),
+              );
+            }
+          }
+          renderFields(panel, fields, objects) {
+            for (const [section, label, path, type, options = []] of fields) {
+              this.field(panel, section, label, path, type, objects, options);
+            }
+          }
+          button(panel, text, onclick) {
+            const button = document.createElement("button");
+            button.textContent = text;
+            button.onclick = onclick;
+            panel.append(button);
           }
           field(panel, sectionName, label, path, type, objects, options = []) {
             let section = panel.querySelector(
