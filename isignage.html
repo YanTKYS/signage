@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>iSignage</title>
+<style>
+:root {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --line: #d8dee9;
+  --text: #202938;
+  --muted: #6b7280;
+  --blue: #2563eb;
+  --blue-soft: #dbeafe;
+  --danger: #dc2626;
+  --shadow: 0 10px 25px #0f172a18;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+button, input, select, textarea { font: inherit; }
+button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  background: #fff;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #f8fafc; border-color: #a8b5c7; }
+button:disabled { cursor: not-allowed; opacity: .45; }
+.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+.danger { color: var(--danger); }
+.app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh; }
+.menubar, .toolbar, .status {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: #fff;
+}
+.menubar { justify-content: space-between; }
+.menu-group, .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.toolbar { background: #fbfdff; }
+.main { display: grid; grid-template-columns: 270px 1fr 330px; min-height: 0; }
+.left, .right { overflow: auto; padding: 12px; background: var(--panel); }
+.left { border-right: 1px solid var(--line); }
+.right { border-left: 1px solid var(--line); }
+.workspace {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  background: #e8edf5;
+}
+.canvas-wrap { position: relative; }
+.canvas, .view-canvas {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: #fff;
+  transform-origin: top left;
+}
+.canvas { box-shadow: var(--shadow); }
+.canvas.grid {
+  background-image: linear-gradient(#e5e7eb 1px, transparent 1px), linear-gradient(90deg, #e5e7eb 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.guides::before, .guides::after {
+  content: "";
+  position: absolute;
+  z-index: 9000;
+  pointer-events: none;
+  background: #60a5fa99;
+}
+.guides::before { top: 0; left: 50%; width: 2px; height: 100%; }
+.guides::after { top: 50%; left: 0; width: 100%; height: 2px; }
+.object-shell { position: absolute; overflow: visible; user-select: none; outline: 0; }
+.object-shell.locked { cursor: not-allowed; }
+.object-content { width: 100%; height: 100%; overflow: hidden; }
+.object-shell.selected { z-index: 20000 !important; }
+.object-shell.selected > .object-content { outline: 3px solid var(--blue); }
+.handle {
+  position: absolute;
+  z-index: 20001;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--blue);
+  border-radius: 50%;
+  background: #fff;
+}
+.h-nw, .h-se { cursor: nwse-resize; }
+.h-ne, .h-sw { cursor: nesw-resize; }
+.h-n, .h-s { cursor: ns-resize; }
+.h-e, .h-w { cursor: ew-resize; }
+.selection-box {
+  position: absolute;
+  z-index: 21000;
+  border: 1px dashed var(--blue);
+  background: #2563eb18;
+  pointer-events: none;
+}
+.text-object { display: flex; width: 100%; height: 100%; white-space: pre-wrap; word-break: break-word; }
+.media-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  background: #111827;
+  color: #fff;
+  text-align: center;
+  white-space: pre-wrap;
+}
+.scene-card { margin-bottom: 8px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; cursor: pointer; }
+.scene-card.active { border-color: var(--blue); background: var(--blue-soft); }
+.section { margin-bottom: 10px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.section summary { padding: 10px; background: #f8fafc; font-weight: 700; cursor: pointer; }
+.section-body { display: grid; gap: 8px; padding: 10px; }
+.field { display: grid; grid-template-columns: 112px 1fr; gap: 8px; align-items: center; }
+.field input, .field select, .field textarea { width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 6px; }
+.field textarea { min-height: 80px; resize: vertical; }
+.empty-message { position: absolute; top: 45%; right: 0; left: 0; color: #64748b; font-size: 28px; text-align: center; pointer-events: none; }
+.toast { position: fixed; bottom: 26px; left: 50%; z-index: 30000; padding: 10px 16px; border-radius: 999px; background: #0f172a; color: #fff; opacity: 0; transform: translateX(-50%); transition: opacity .2s; }
+.toast.show { opacity: 1; }
+.view-mode { position: fixed; inset: 0; z-index: 20000; display: none; align-items: center; justify-content: center; background: #000; cursor: default; }
+.view-mode.hide-cursor { cursor: none; }
+.view-canvas { transform-origin: center center; }
+.status { justify-content: space-between; border-top: 1px solid var(--line); border-bottom: 0; color: var(--muted); font-size: 13px; }
+.collapsed .left { display: none; }
+.collapsed .main { grid-template-columns: 1fr 330px; }
+input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+<div id="app" class="app">
+  <div class="menubar">
+    <div class="menu-group">
+      <strong>iSignage</strong>
+      <button id="newBtn" title="確認後、履歴をクリアして新規作成します">新規</button>
+      <button id="saveBtn">保存</button>
+      <button id="exportBtn">JSON出力</button>
+      <button id="importBtn">JSON読込</button>
+      <button id="resetBtn" class="danger">初期化</button>
+      <input id="importFile" type="file" accept="application/json">
+    </div>
+    <button id="playBtn" class="primary">▶ 表示開始</button>
+  </div>
+  <div class="toolbar">
+    <button id="addText">テキスト</button><button id="addImage">画像</button><button id="addVideo">動画</button><button id="addPlayer">メディア</button><button id="addRect">図形</button><button id="addClock">時計</button>
+    <span>|</span>
+    <button id="front" data-needs-selection title="選択が必要です">最前面</button><button id="back" data-needs-selection title="選択が必要です">最背面</button><button id="forward" data-needs-selection title="選択が必要です">前面</button><button id="backward" data-needs-selection title="選択が必要です">背面</button>
+    <button id="alignLeft" data-needs-multi title="2件以上の選択が必要です">左揃え</button><button id="alignCenter" data-needs-multi title="2件以上の選択が必要です">水平中央</button><button id="alignRight" data-needs-multi title="2件以上の選択が必要です">右揃え</button><button id="alignTop" data-needs-multi title="2件以上の選択が必要です">上揃え</button><button id="alignMiddle" data-needs-multi title="2件以上の選択が必要です">垂直中央</button><button id="alignBottom" data-needs-multi title="2件以上の選択が必要です">下揃え</button>
+    <button id="distH" data-needs-three title="3件以上の選択が必要です">水平等間隔</button><button id="distV" data-needs-three title="3件以上の選択が必要です">垂直等間隔</button><button id="centerCanvas" data-needs-selection title="選択が必要です">中央配置</button>
+    <label><input id="gridChk" type="checkbox">グリッド</label><label><input id="snapChk" type="checkbox">吸着</label><label><input id="guideChk" type="checkbox">中央線</label>
+  </div>
+  <div class="main">
+    <aside class="left">
+      <div class="row"><button id="toggleScenes">折りたたみ</button><button id="addScene">追加</button><button id="dupScene">複製</button><button id="delScene" class="danger">削除</button></div>
+      <div class="row"><button id="sceneUp">上へ</button><button id="sceneDown">下へ</button><button id="prevScene">前へ</button><button id="nextScene">次へ</button></div>
+      <hr><div id="sceneList"></div>
+      <details open class="section"><summary>シーン設定</summary><div class="section-body" id="sceneSettings"></div></details>
+      <details open class="section"><summary>シーン切替</summary><div class="section-body"><label class="field"><span>方法</span><select id="sceneMode"><option value="none">切り替えない</option><option value="sequence">指定秒数ごと</option><option value="random">ランダム</option></select></label></div></details>
+    </aside>
+    <main class="workspace" id="workspace"><div class="canvas-wrap" id="canvasWrap"><div id="canvas" class="canvas"></div><div id="empty" class="empty-message">上の「挿入」から、テキストやメディアを追加してください。</div></div></main>
+    <aside class="right"><h3>プロパティ</h3><div id="props">オブジェクトを選択してください。</div></aside>
+  </div>
+  <div class="status"><span id="statusText">未保存</span><span id="zoomText">1920×1080</span></div>
+</div>
+<div id="viewer" class="view-mode"><div id="viewCanvas" class="view-canvas"></div></div>
+<div id="toast" class="toast"></div>
+<script>
+(() => {
+  'use strict';
+  const W = 1920;
+  const H = 1080;
+  const DB = 'isignage-db';
+  const STORE = 'state';
+  const HANDLES = 'handles';
+  const IMG = /\.(jpe?g|png|gif|webp|bmp)$/i;
+  const VID = /\.(mp4|webm|ogg|mov|m4v)$/i;
+  const TYPES = new Set(['text', 'image', 'video', 'player', 'clock', 'shape']);
+  const $ = (selector) => document.querySelector(selector);
+  const uid = () => `id_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const copy = (value) => structuredClone(value);
+  function clamp(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.max(min, Math.min(max, number));
+  }
+  function color(value, fallback = '#ffffff') {
+    if (typeof value === 'string' && /^#[0-9a-f]{8}$/i.test(value)) return value.slice(0, 7);
+    return typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  }
+  function legacyAlpha(value, fallback = 1) {
+    if (typeof value === 'string' && /^#[0-9a-f]{8}$/i.test(value)) return parseInt(value.slice(7), 16) / 255;
+    return fallback;
+  }
+  function rgba(hex, alpha) {
+    const safe = color(hex);
+    const r = parseInt(safe.slice(1, 3), 16);
+    const g = parseInt(safe.slice(3, 5), 16);
+    const b = parseInt(safe.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${clamp(alpha, 0, 1, 1)})`;
+  }
+  function toast(message) {
+    const el = $('#toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => el.classList.remove('show'), 2200);
+  }
+  class ObjectUrlManager {
+    constructor() { this.urls = new Map(); }
+    create(key, file) {
+      this.revoke(key);
+      const url = URL.createObjectURL(file);
+      this.urls.set(key, url);
+      return url;
+    }
+    revoke(key) {
+      const url = this.urls.get(key);
+      if (url) {
+        URL.revokeObjectURL(url);
+        this.urls.delete(key);
+      }
+    }
+    revokePrefix(prefix) {
+      for (const key of [...this.urls.keys()]) {
+        if (key.startsWith(prefix)) this.revoke(key);
+      }
+    }
+    revokeAll() { for (const key of [...this.urls.keys()]) this.revoke(key); }
+  }
+  class DBM {
+    async open() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB, 1);
+        req.onupgradeneeded = () => {
+          req.result.createObjectStore(STORE);
+          req.result.createObjectStore(HANDLES);
+        };
+        req.onsuccess = () => { this.db = req.result; resolve(); };
+        req.onerror = () => reject(req.error);
+      });
+    }
+    store(name, mode = 'readonly') { return this.db.transaction(name, mode).objectStore(name); }
+    get(name, key) {
+      return new Promise((resolve) => {
+        const req = this.store(name).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => resolve(null);
+      });
+    }
+    put(name, key, value) {
+      return new Promise((resolve, reject) => {
+        const req = this.store(name, 'readwrite').put(value, key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+  }
+  class MediaSession {
+    constructor(app, container, object, sceneId) {
+      this.app = app;
+      this.container = container;
+      this.object = object;
+      this.sceneId = sceneId;
+      this.files = [];
+      this.index = -1;
+      this.lastRandom = -1;
+      this.failed = new Set();
+      this.switchTimer = null;
+      this.refreshTimer = null;
+      this.media = null;
+      this.stopped = false;
+      this.urlKey = `view:${sceneId}:${object.id}:player`;
+    }
+    async start() {
+      this.files = await this.app.scanPlayer(this.object, false);
+      this.startAutoRefresh();
+      if (!this.files.length) {
+        this.fallback('フォルダに再生可能なファイルがありません。');
+        return;
+      }
+      this.next();
+    }
+    stop() {
+      if (this.stopped) return;
+      this.stopped = true;
+      clearTimeout(this.switchTimer);
+      clearInterval(this.refreshTimer);
+      this.detach();
+      this.app.urls.revoke(this.urlKey);
+      this.container.textContent = '';
+    }
+    startAutoRefresh() {
+      if (!this.object.autoRefresh) return;
+      const minutes = clamp(this.object.refreshMinutes, 1, 1440, 5);
+      this.object.refreshMinutes = minutes;
+      this.refreshTimer = setInterval(async () => {
+        const nextFiles = await this.app.scanPlayer(this.object, false);
+        if (!this.stopped) this.files = nextFiles;
+      }, minutes * 60 * 1000);
+    }
+    chooseIndex() {
+      if (this.object.order === 'random' && this.files.length > 1) {
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const candidate = Math.floor(Math.random() * this.files.length);
+          if (candidate !== this.lastRandom && !this.failed.has(candidate)) {
+            this.lastRandom = candidate;
+            return candidate;
+          }
+        }
+      }
+      for (let attempt = 0; attempt < this.files.length; attempt += 1) {
+        let nextIndex = this.index + 1;
+        if (nextIndex >= this.files.length) {
+          if (!this.object.repeat) return null;
+          nextIndex = 0;
+          this.failed.clear();
+        }
+        this.index = nextIndex;
+        if (!this.failed.has(nextIndex)) return nextIndex;
+      }
+      return null;
+    }
+    next() {
+      if (this.stopped) return;
+      if (!this.files.length || this.failed.size >= this.files.length) {
+        this.fallback('メディアを再生できません。\nフォルダまたはファイルを確認してください。');
+        return;
+      }
+      const nextIndex = this.chooseIndex();
+      if (nextIndex === null) return;
+      this.index = nextIndex;
+      this.show(this.files[nextIndex], nextIndex);
+    }
+    show(file, index) {
+      this.detach();
+      this.container.textContent = '';
+      const url = this.app.urls.create(this.urlKey, file);
+      const isVideo = VID.test(file.name);
+      const media = document.createElement(isVideo ? 'video' : 'img');
+      media.src = url;
+      media.style.width = '100%';
+      media.style.height = '100%';
+      media.style.objectFit = this.object.fit;
+      media.onerror = () => this.fail(index);
+      this.media = media;
+      this.container.append(media);
+      if (isVideo) {
+        media.autoplay = true;
+        media.muted = Boolean(this.object.muted);
+        media.onended = () => { this.failed.clear(); this.next(); };
+        media.play().catch(() => this.fail(index));
+      } else {
+        this.failed.clear();
+        this.switchTimer = setTimeout(() => this.next(), this.object.imageSeconds * 1000);
+      }
+    }
+    fail(index) {
+      if (this.stopped) return;
+      this.failed.add(index);
+      this.detach();
+      this.app.urls.revoke(this.urlKey);
+      if (this.failed.size >= this.files.length) {
+        this.fallback('メディアを再生できません。\nフォルダまたはファイルを確認してください。');
+        return;
+      }
+      this.switchTimer = setTimeout(() => this.next(), 1500);
+    }
+    detach() {
+      clearTimeout(this.switchTimer);
+      if (this.media) {
+        this.media.onerror = null;
+        if (this.media.tagName === 'VIDEO') {
+          this.media.onended = null;
+          this.media.pause();
+          this.media.removeAttribute('src');
+          this.media.load();
+        }
+      }
+      this.media = null;
+    }
+    fallback(message) {
+      this.detach();
+      this.app.urls.revoke(this.urlKey);
+      this.container.textContent = '';
+      const div = document.createElement('div');
+      div.className = 'media-fallback';
+      div.textContent = message;
+      this.container.append(div);
+    }
+  }
+  class App {
+    constructor() {
+      this.db = new DBM();
+      this.urls = new ObjectUrlManager();
+      this.state = this.fresh();
+      this.sel = [];
+      this.clip = [];
+      this.undoStack = [];
+      this.redoStack = [];
+      this.scale = 1;
+      this.drag = null;
+      this.range = null;
+      this.sessions = [];
+      this.viewing = false;
+      this.stopping = false;
+      this.init();
+    }
+    fresh() {
+      return { version: 2, lastScene: 0, ui: { grid: false, guides: false, snap: false, sceneMode: 'none' }, scenes: [this.scene('通常画面')] };
+    }
+    scene(name) { return { id: uid(), name, bg: '#ffffff', duration: 10, objects: [] }; }
+    get current() { return this.state.scenes[this.state.lastScene] || this.state.scenes[0]; }
+    async init() {
+      try {
+        await this.db.open();
+        const saved = await this.db.get(STORE, 'doc');
+        if (saved) this.state = this.normalizeState(saved);
+      } catch (error) {
+        toast('保存領域を利用できません。JSONバックアップを使ってください。');
+      }
+      this.bind();
+      this.renderAll();
+      setInterval(() => this.updateClocks(), 500);
+      window.addEventListener('resize', () => { this.fit(); this.fitView(); });
+      document.addEventListener('fullscreenchange', () => this.fullscreenChanged());
+    }
+    bind() {
+      $('#saveBtn').onclick = () => this.save();
+      $('#newBtn').onclick = () => this.resetDoc('新規作成しますか？');
+      $('#resetBtn').onclick = () => this.resetDoc('初期状態へ戻しますか？');
+      $('#exportBtn').onclick = () => this.exportJson();
+      $('#importBtn').onclick = () => $('#importFile').click();
+      $('#importFile').onchange = (event) => this.importJson(event);
+      $('#playBtn').onclick = () => this.startView();
+      $('#addText').onclick = () => this.add('text');
+      $('#addImage').onclick = () => this.add('image');
+      $('#addVideo').onclick = () => this.add('video');
+      $('#addPlayer').onclick = () => this.add('player');
+      $('#addRect').onclick = () => this.add('shape');
+      $('#addClock').onclick = () => this.add('clock');
+      for (const id of ['front', 'back', 'forward', 'backward']) $('#'+id).onclick = () => this.z(id);
+      for (const id of ['alignLeft', 'alignCenter', 'alignRight', 'alignTop', 'alignMiddle', 'alignBottom', 'distH', 'distV', 'centerCanvas']) $('#'+id).onclick = () => this.align(id);
+      $('#gridChk').onchange = (e) => { this.state.ui.grid = e.target.checked; this.renderCanvas(); this.dirty(); };
+      $('#guideChk').onchange = (e) => { this.state.ui.guides = e.target.checked; this.renderCanvas(); this.dirty(); };
+      $('#snapChk').onchange = (e) => { this.state.ui.snap = e.target.checked; this.dirty(); };
+      $('#sceneMode').onchange = (e) => { this.state.ui.sceneMode = e.target.value; this.dirty(); };
+      $('#addScene').onclick = () => this.addScene();
+      $('#dupScene').onclick = () => this.dupScene();
+      $('#delScene').onclick = () => this.delScene();
+      $('#sceneUp').onclick = () => this.moveScene(-1);
+      $('#sceneDown').onclick = () => this.moveScene(1);
+      $('#prevScene').onclick = () => this.switchScene(this.state.lastScene - 1);
+      $('#nextScene').onclick = () => this.switchScene(this.state.lastScene + 1);
+      $('#toggleScenes').onclick = () => $('#app').classList.toggle('collapsed');
+      $('#canvas').onpointerdown = (event) => this.startRange(event);
+      $('#viewer').onmousemove = () => this.bumpCursor();
+      document.addEventListener('keydown', (event) => this.keys(event));
+    }
+    make(type) {
+      const base = { id: uid(), type, name: { text: 'テキスト', image: '画像', video: '動画', player: 'メディア', clock: '時計', shape: '図形' }[type], x: 220, y: 160, w: 480, h: 270, rot: 0, opacity: 1, locked: false, visible: true, z: Date.now(), style: {} };
+      if (type === 'text') return { ...base, text: 'テキストを入力', style: { fontSize: 72, bold: false, color: '#111827', bgColor: '#ffffff', bgAlpha: 0, align: 'center', valign: 'center', pad: 20, border: false, borderColor: '#111827', radius: 0 } };
+      if (type === 'clock') return { ...base, format: 'HH:mm', style: { fontSize: 88, color: '#111827', bgColor: '#ffffff', bgAlpha: 0, align: 'center' } };
+      if (type === 'shape') return { ...base, shape: 'rect', style: { fill: '#60a5fa', fillAlpha: 1, stroke: '#1d4ed8', strokeWidth: 4, radius: 0, lineWidth: 8 } };
+      if (type === 'image') return { ...base, fit: 'contain', fileName: '未選択', file: null, keepRatio: true };
+      if (type === 'video') return { ...base, fit: 'contain', fileName: '未選択', file: null, autoplay: true, loop: true, muted: true, controls: false, keepRatio: true };
+      return { ...base, fit: 'contain', folderId: null, folderName: '未選択', imageCount: 0, videoCount: 0, totalCount: 0, lastRefreshAt: '', lastRefreshStatus: '未更新', order: 'name', repeat: true, imageSeconds: 5, muted: true, effect: 'none', subfolders: false, autoRefresh: false, refreshMinutes: 5, files: [] };
+    }
+    normalizeState(raw) {
+      const state = this.fresh();
+      if (!raw || typeof raw !== 'object') return state;
+      state.ui = { grid: Boolean(raw.ui && raw.ui.grid), guides: Boolean(raw.ui && raw.ui.guides), snap: Boolean(raw.ui && raw.ui.snap), sceneMode: ['none', 'sequence', 'random'].includes(raw.ui && raw.ui.sceneMode) ? raw.ui.sceneMode : 'none' };
+      const scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
+      state.scenes = scenes.map((scene, index) => this.normalizeScene(scene, index)).filter(Boolean);
+      if (!state.scenes.length) state.scenes = [this.scene('通常画面')];
+      state.lastScene = clamp(raw.lastScene, 0, state.scenes.length - 1, 0);
+      return state;
+    }
+    normalizeScene(scene, index) {
+      if (!scene || typeof scene !== 'object') return null;
+      return { id: typeof scene.id === 'string' ? scene.id : uid(), name: typeof scene.name === 'string' && scene.name.trim() ? scene.name.trim() : `シーン ${index + 1}`, bg: color(scene.bg, '#ffffff'), duration: clamp(scene.duration, 1, 86400, 10), objects: Array.isArray(scene.objects) ? scene.objects.map((object) => this.normalizeObject(object)).filter(Boolean) : [] };
+    }
+    normalizeObject(source) {
+      if (!source || typeof source !== 'object' || !TYPES.has(source.type)) return null;
+      const object = this.make(source.type);
+      Object.assign(object, { id: typeof source.id === 'string' ? source.id : uid(), name: typeof source.name === 'string' && source.name.trim() ? source.name.trim() : object.name, x: clamp(source.x, -W, W - 20, object.x), y: clamp(source.y, -H, H - 20, object.y), w: clamp(source.w, 20, W * 2, object.w), h: clamp(source.h, 20, H * 2, object.h), rot: clamp(source.rot, -3600, 3600, 0), opacity: clamp(source.opacity, 0, 1, 1), locked: Boolean(source.locked), visible: source.visible !== false, z: clamp(source.z, -999999, 9999999999999, Date.now()) });
+      object.x = clamp(object.x, -object.w + 20, W - 20, object.x);
+      object.y = clamp(object.y, -object.h + 20, H - 20, object.y);
+      if (object.type === 'text') { object.text = typeof source.text === 'string' ? source.text : object.text; object.style = this.textStyle(source.style || {}); }
+      if (object.type === 'clock') { object.format = ['HH:mm', 'HH:mm:ss', 'yyyy年M月d日', 'yyyy年M月d日（曜）', 'datetime'].includes(source.format) ? source.format : object.format; object.style = this.clockStyle(source.style || {}); }
+      if (object.type === 'shape') { object.shape = ['rect', 'round', 'line'].includes(source.shape) ? source.shape : object.shape; object.style = this.shapeStyle(source.style || {}); }
+      if (object.type === 'image' || object.type === 'video') { object.fit = ['contain', 'cover', 'fill'].includes(source.fit) ? source.fit : object.fit; object.fileName = typeof source.fileName === 'string' ? source.fileName : object.fileName; object.file = source.file instanceof File ? source.file : null; object.keepRatio = source.keepRatio !== false; }
+      if (object.type === 'video') { object.autoplay = source.autoplay !== false; object.loop = source.loop !== false; object.muted = source.muted !== false; object.controls = Boolean(source.controls); }
+      if (object.type === 'player') Object.assign(object, { fit: ['contain', 'cover', 'fill'].includes(source.fit) ? source.fit : object.fit, folderId: typeof source.folderId === 'string' ? source.folderId : null, folderName: typeof source.folderName === 'string' ? source.folderName : object.folderName, imageCount: clamp(source.imageCount, 0, 1000000, 0), videoCount: clamp(source.videoCount, 0, 1000000, 0), order: source.order === 'random' ? 'random' : 'name', repeat: source.repeat !== false, imageSeconds: clamp(source.imageSeconds, 1, 86400, 5), muted: source.muted !== false, effect: source.effect === 'fade' ? 'fade' : 'none', subfolders: Boolean(source.subfolders), autoRefresh: Boolean(source.autoRefresh), refreshMinutes: clamp(source.refreshMinutes, 1, 1440, 5), lastRefreshAt: typeof source.lastRefreshAt === 'string' ? source.lastRefreshAt : '', lastRefreshStatus: typeof source.lastRefreshStatus === 'string' ? source.lastRefreshStatus : '未更新' });
+      if (object.type === 'player') object.totalCount = object.imageCount + object.videoCount;
+      return object;
+    }
+    textStyle(style) { return { fontSize: clamp(style.fontSize, 8, 500, 72), bold: Boolean(style.bold), color: color(style.color, '#111827'), bgColor: color(style.bgColor || style.bg, '#ffffff'), bgAlpha: clamp(style.bgAlpha, 0, 1, legacyAlpha(style.bg, 0)), align: ['left', 'center', 'right'].includes(style.align) ? style.align : 'center', valign: ['top', 'center', 'bottom'].includes(style.valign) ? style.valign : 'center', pad: clamp(style.pad, 0, 300, 20), border: Boolean(style.border), borderColor: color(style.borderColor, '#111827'), radius: clamp(style.radius, 0, 500, 0) }; }
+    clockStyle(style) { return { fontSize: clamp(style.fontSize, 8, 500, 88), color: color(style.color, '#111827'), bgColor: color(style.bgColor || style.bg, '#ffffff'), bgAlpha: clamp(style.bgAlpha, 0, 1, legacyAlpha(style.bg, 0)), align: ['left', 'center', 'right'].includes(style.align) ? style.align : 'center' }; }
+    shapeStyle(style) { return { fill: color(style.fill, '#60a5fa'), fillAlpha: clamp(style.fillAlpha, 0, 1, legacyAlpha(style.fill, 1)), stroke: color(style.stroke, '#1d4ed8'), strokeWidth: clamp(style.strokeWidth, 0, 100, 4), radius: clamp(style.radius, 0, 500, 0), lineWidth: clamp(style.lineWidth, 1, 100, 8) }; }
+    push() { this.undoStack.push(copy(this.state)); if (this.undoStack.length > 80) this.undoStack.shift(); this.redoStack = []; this.commands(); }
+    clearHistory() { this.undoStack = []; this.redoStack = []; this.commands(); }
+    dirty() { $('#statusText').textContent = '未保存'; clearTimeout(this.autosave); this.autosave = setTimeout(() => this.save(true), 700); this.commands(); }
+    async save(auto = false) { try { await this.db.put(STORE, 'doc', this.state); $('#statusText').textContent = `保存済み ${new Date().toLocaleTimeString()}`; if (!auto) toast('保存しました'); } catch (error) { toast('保存できませんでした'); } }
+    add(type) { this.push(); const object = this.make(type); this.current.objects.push(object); this.sel = [object.id]; this.renderAll(); this.dirty(); if (type === 'image' || type === 'video') this.pickFile(object); }
+    renderAll() { this.urls.revokePrefix('edit:'); this.renderScenes(); this.renderSceneSettings(); this.renderCanvas(); this.renderProps(); this.fit(); this.sync(); this.commands(); }
+    sync() { $('#gridChk').checked = this.state.ui.grid; $('#guideChk').checked = this.state.ui.guides; $('#snapChk').checked = this.state.ui.snap; $('#sceneMode').value = this.state.ui.sceneMode; }
+    renderScenes() {
+      const list = $('#sceneList');
+      list.textContent = '';
+      this.state.scenes.forEach((scene, index) => {
+        const card = document.createElement('div');
+        card.className = `scene-card ${index === this.state.lastScene ? 'active' : ''}`;
+        card.textContent = `${index + 1}. ${scene.name}`;
+        card.onclick = () => this.switchScene(index);
+        list.append(card);
+      });
+    }
+    renderSceneSettings() {
+      const box = $('#sceneSettings');
+      const scene = this.current;
+      box.textContent = '';
+      box.append(this.sceneField('シーン名', 'text', scene.name, (v, input) => { const safe = String(v).trim() || '名称未設定'; input.value = safe; this.push(); scene.name = safe; this.renderScenes(); this.dirty(); }));
+      box.append(this.sceneField('背景色', 'color', scene.bg, (v) => { this.push(); scene.bg = color(v); this.renderCanvas(); this.dirty(); }));
+      box.append(this.sceneField('表示秒数', 'number', scene.duration, (v, input) => { const safe = clamp(v, 1, 86400, 10); input.value = safe; this.push(); scene.duration = safe; this.dirty(); }));
+    }
+    sceneField(label, type, value, onchange) {
+      const wrap = document.createElement('label');
+      wrap.className = 'field';
+      const span = document.createElement('span');
+      span.textContent = label;
+      const input = document.createElement('input');
+      input.type = type;
+      input.value = value;
+      input.onchange = () => onchange(input.value, input);
+      wrap.append(span, input);
+      return wrap;
+    }
+    renderCanvas(target = $('#canvas'), view = false) {
+      if (!view) this.urls.revokePrefix('edit:');
+      target.textContent = '';
+      target.className = view ? 'view-canvas' : 'canvas';
+      if (!view && this.state.ui.grid) target.classList.add('grid');
+      if (!view && this.state.ui.guides) target.classList.add('guides');
+      target.style.background = this.current.bg;
+      for (const object of [...this.current.objects].sort((a, b) => a.z - b.z)) {
+        if (object.visible) target.append(this.element(object, view));
+      }
+      $('#empty').style.display = !view && this.current.objects.length === 0 ? 'block' : 'none';
+    }
+    element(object, view) {
+      const shell = document.createElement('div');
+      shell.className = `object-shell ${this.sel.includes(object.id) && !view ? 'selected' : ''} ${object.locked ? 'locked' : ''}`;
+      shell.dataset.id = object.id;
+      this.applyGeom(shell, object);
+      const content = document.createElement('div');
+      content.className = 'object-content';
+      shell.append(content);
+      this.content(content, object, view);
+      if (!view) {
+        shell.onpointerdown = (event) => this.startDrag(event, object);
+        shell.ondblclick = () => this.doubleClick(object);
+        if (this.sel.includes(object.id)) this.handles(shell, object);
+      }
+      return shell;
+    }
+    applyGeom(el, object) { Object.assign(el.style, { left: `${object.x}px`, top: `${object.y}px`, width: `${object.w}px`, height: `${object.h}px`, opacity: object.opacity, transform: `rotate(${object.rot}deg)`, zIndex: object.z }); }
+    content(box, object, view) {
+      if (object.type === 'text') this.text(box, object);
+      if (object.type === 'clock') this.clock(box, object);
+      if (object.type === 'shape') this.shape(box, object);
+      if (object.type === 'image' || object.type === 'video') this.singleMedia(box, object, view);
+      if (object.type === 'player') this.player(box, object, view);
+    }
+    text(box, object) {
+      const div = document.createElement('div');
+      div.className = 'text-object';
+      div.textContent = object.text || '';
+      Object.assign(div.style, { fontSize: `${object.style.fontSize}px`, fontWeight: object.style.bold ? '700' : '400', color: object.style.color, background: rgba(object.style.bgColor, object.style.bgAlpha), justifyContent: object.style.align === 'left' ? 'flex-start' : object.style.align === 'right' ? 'flex-end' : 'center', alignItems: object.style.valign === 'top' ? 'flex-start' : object.style.valign === 'bottom' ? 'flex-end' : 'center', padding: `${object.style.pad}px`, border: object.style.border ? `2px solid ${object.style.borderColor}` : '0', borderRadius: `${object.style.radius}px`, textAlign: object.style.align });
+      box.append(div);
+    }
+    clock(box, object) {
+      const div = document.createElement('div');
+      div.className = 'text-object clock-text';
+      div.textContent = this.clockText(object);
+      Object.assign(div.style, { fontSize: `${object.style.fontSize}px`, color: object.style.color, background: rgba(object.style.bgColor, object.style.bgAlpha), justifyContent: object.style.align === 'left' ? 'flex-start' : object.style.align === 'right' ? 'flex-end' : 'center', alignItems: 'center', textAlign: object.style.align });
+      box.append(div);
+    }
+    shape(box, object) {
+      if (object.shape === 'line') { box.style.height = `${object.style.lineWidth}px`; box.style.marginTop = `${Math.max(0, (object.h - object.style.lineWidth) / 2)}px`; box.style.background = object.style.stroke; return; }
+      box.style.background = rgba(object.style.fill, object.style.fillAlpha);
+      box.style.border = `${object.style.strokeWidth}px solid ${object.style.stroke}`;
+      box.style.borderRadius = `${object.shape === 'round' ? object.style.radius || 30 : object.style.radius}px`;
+    }
+    singleMedia(box, object, view) {
+      if (!object.file) { this.fallback(box, object.fileName || 'ファイル未選択'); return; }
+      const prefix = view ? 'view' : 'edit';
+      const key = `${prefix}:${object.id}:single`;
+      const url = this.urls.create(key, object.file);
+      const media = document.createElement(object.type === 'video' ? 'video' : 'img');
+      media.src = url;
+      media.style.width = '100%';
+      media.style.height = '100%';
+      media.style.objectFit = object.fit;
+      media.onerror = () => { this.urls.revoke(key); box.textContent = ''; this.fallback(box, object.type === 'video' ? '動画を読み込めません' : '画像を読み込めません'); };
+      if (object.type === 'video') { media.autoplay = view || object.autoplay; media.loop = object.loop; media.muted = object.muted; media.controls = object.controls && !view; if (view) media.play().catch(() => undefined); }
+      box.append(media);
+    }
+    player(box, object, view) {
+      if (!view) { this.fallback(box, `メディアプレイヤー: ${object.folderName}\n画像 ${object.imageCount} / 動画 ${object.videoCount} / 合計 ${object.totalCount || 0}\n最終更新: ${object.lastRefreshAt || '未更新'}\n状態: ${object.lastRefreshStatus || '未更新'}`); return; }
+      this.fallback(box, 'メディアを準備中');
+      const session = new MediaSession(this, box, object, this.current.id);
+      this.sessions.push(session);
+      session.start();
+    }
+    fallback(box, message) { const div = document.createElement('div'); div.className = 'media-fallback'; div.textContent = message; box.append(div); }
+    handles(shell) {
+      for (const pos of ['nw','n','ne','e','se','s','sw','w']) {
+        const handle = document.createElement('i');
+        handle.className = `handle h-${pos}`;
+        const x = pos.includes('w') ? 0 : pos.includes('e') ? 100 : 50;
+        const y = pos.includes('n') ? 0 : pos.includes('s') ? 100 : 50;
+        handle.style.left = `calc(${x}% - 7px)`;
+        handle.style.top = `calc(${y}% - 7px)`;
+        handle.onpointerdown = (event) => this.startDrag(event, this.current.objects.find((o) => o.id === shell.dataset.id), pos);
+        shell.append(handle);
+      }
+    }
+    startDrag(event, object, handle = null) {
+      event.stopPropagation();
+      if (!object || object.locked) return;
+      if (event.ctrlKey) this.sel = this.sel.includes(object.id) ? this.sel.filter((id) => id !== object.id) : [...this.sel, object.id];
+      else if (!this.sel.includes(object.id)) this.sel = [object.id];
+      this.renderAll();
+      this.push();
+      this.drag = { sx: event.clientX, sy: event.clientY, ids: [...this.sel], start: copy(this.current.objects), handle };
+      document.onpointermove = (moveEvent) => this.move(moveEvent);
+      document.onpointerup = () => this.endDrag();
+    }
+    move(event) {
+      if (!this.drag) return;
+      const dx = (event.clientX - this.drag.sx) / this.scale;
+      const dy = (event.clientY - this.drag.sy) / this.scale;
+      for (const id of this.drag.ids) {
+        const object = this.current.objects.find((item) => item.id === id);
+        const start = this.drag.start.find((item) => item.id === id);
+        if (!object || !start || object.locked) continue;
+        this.applyDelta(object, start, dx, dy, event.shiftKey);
+        const el = document.querySelector(`.object-shell[data-id="${CSS.escape(id)}"]`);
+        if (el) this.applyGeom(el, object);
+      }
+      this.renderProps();
+    }
+    applyDelta(object, start, dx, dy, shiftKey) {
+      const handle = this.drag.handle;
+      if (!handle) {
+        object.x = clamp(start.x + dx, -object.w + 20, W - 20, start.x);
+        object.y = clamp(start.y + dy, -object.h + 20, H - 20, start.y);
+        if (this.state.ui.snap) this.snap(object);
+        return;
+      }
+      let x = start.x;
+      let y = start.y;
+      let width = start.w;
+      let height = start.h;
+      if (handle.includes('e')) width = Math.max(20, start.w + dx);
+      if (handle.includes('s')) height = Math.max(20, start.h + dy);
+      if (handle.includes('w')) { x = start.x + dx; width = Math.max(20, start.w - dx); }
+      if (handle.includes('n')) { y = start.y + dy; height = Math.max(20, start.h - dy); }
+      const ratioLocked = (object.type === 'image' || object.type === 'video') && (shiftKey ? !object.keepRatio : object.keepRatio) && ['nw','ne','se','sw'].includes(handle);
+      if (ratioLocked) {
+        const ratio = Math.max(0.01, start.w / Math.max(1, start.h));
+        if (Math.abs(dx) >= Math.abs(dy)) height = width / ratio;
+        else width = height * ratio;
+        if (handle.includes('w')) x = start.x + start.w - width;
+        if (handle.includes('n')) y = start.y + start.h - height;
+      }
+      object.w = clamp(width, 20, W * 2, start.w);
+      object.h = clamp(height, 20, H * 2, start.h);
+      object.x = clamp(x, -object.w + 20, W - 20, start.x);
+      object.y = clamp(y, -object.h + 20, H - 20, start.y);
+    }
+    snap(object) {
+      object.x = Math.round(object.x / 10) * 10;
+      object.y = Math.round(object.y / 10) * 10;
+      if (Math.abs(object.x + object.w / 2 - W / 2) < 8) object.x = W / 2 - object.w / 2;
+      if (Math.abs(object.y + object.h / 2 - H / 2) < 8) object.y = H / 2 - object.h / 2;
+    }
+    endDrag() { document.onpointermove = null; document.onpointerup = null; this.drag = null; this.renderAll(); this.dirty(); }
+    startRange(event) {
+      if (event.target !== $('#canvas')) return;
+      const rect = $('#canvas').getBoundingClientRect();
+      this.range = { sx: (event.clientX - rect.left) / this.scale, sy: (event.clientY - rect.top) / this.scale, base: event.ctrlKey ? [...this.sel] : [] };
+      const box = document.createElement('div');
+      box.id = 'selectionBox';
+      box.className = 'selection-box';
+      $('#canvas').append(box);
+      document.onpointermove = (moveEvent) => this.rangeMove(moveEvent);
+      document.onpointerup = () => this.rangeEnd();
+    }
+    rangeMove(event) {
+      if (!this.range) return;
+      const rect = $('#canvas').getBoundingClientRect();
+      const x2 = (event.clientX - rect.left) / this.scale;
+      const y2 = (event.clientY - rect.top) / this.scale;
+      const left = Math.min(this.range.sx, x2);
+      const top = Math.min(this.range.sy, y2);
+      const right = Math.max(this.range.sx, x2);
+      const bottom = Math.max(this.range.sy, y2);
+      const box = $('#selectionBox');
+      if (box) Object.assign(box.style, { left: `${left}px`, top: `${top}px`, width: `${right - left}px`, height: `${bottom - top}px` });
+      const selected = new Set(this.range.base);
+      for (const object of this.current.objects) {
+        const hit = !(right < object.x || left > object.x + object.w || bottom < object.y || top > object.y + object.h);
+        if (hit) selected.add(object.id);
+      }
+      this.sel = [...selected];
+      this.renderProps();
+      this.commands();
+    }
+    rangeEnd() { document.onpointermove = null; document.onpointerup = null; const box = $('#selectionBox'); if (box) box.remove(); this.range = null; this.renderAll(); }
+    renderProps() {
+      const panel = $('#props');
+      panel.textContent = '';
+      const objects = this.current.objects.filter((object) => this.sel.includes(object.id));
+      if (!objects.length) { panel.textContent = 'オブジェクトを選択してください。'; return; }
+      for (const [section, label, path, type] of [['位置とサイズ','名前','name','text'],['位置とサイズ','X','x','number'],['位置とサイズ','Y','y','number'],['位置とサイズ','幅','w','number'],['位置とサイズ','高さ','h','number'],['位置とサイズ','回転','rot','number'],['位置とサイズ','透明度','opacity','number'],['表示','ロック','locked','checkbox'],['表示','表示','visible','checkbox']]) this.field(panel, section, label, path, type, objects);
+      if (objects.length > 1) return;
+      const object = objects[0];
+      if (object.type === 'text') { this.field(panel,'文字','内容','text','textarea',objects); this.field(panel,'文字','サイズ','style.fontSize','number',objects); this.field(panel,'文字','太字','style.bold','checkbox',objects); this.field(panel,'文字','文字色','style.color','color',objects); this.field(panel,'文字','横揃え','style.align','select',objects,[['left','左'],['center','中央'],['right','右']]); this.field(panel,'文字','縦揃え','style.valign','select',objects,[['top','上'],['center','中央'],['bottom','下']]); this.field(panel,'背景と枠線','背景色','style.bgColor','color',objects); this.field(panel,'背景と枠線','背景透明度','style.bgAlpha','number',objects); this.field(panel,'背景と枠線','余白','style.pad','number',objects); this.field(panel,'背景と枠線','枠線','style.border','checkbox',objects); this.field(panel,'背景と枠線','枠線色','style.borderColor','color',objects); this.field(panel,'背景と枠線','角丸','style.radius','number',objects); }
+      if (object.type === 'clock') { this.field(panel,'文字','形式','format','select',objects,[['HH:mm','HH:mm'],['HH:mm:ss','HH:mm:ss'],['yyyy年M月d日','yyyy年M月d日'],['yyyy年M月d日（曜）','yyyy年M月d日（曜）'],['datetime','日付＋時刻']]); this.field(panel,'文字','サイズ','style.fontSize','number',objects); this.field(panel,'文字','文字色','style.color','color',objects); this.field(panel,'文字','背景色','style.bgColor','color',objects); this.field(panel,'文字','背景透明度','style.bgAlpha','number',objects); this.field(panel,'文字','配置','style.align','select',objects,[['left','左'],['center','中央'],['right','右']]); }
+      if (object.type === 'image' || object.type === 'video') { const b = document.createElement('button'); b.textContent = 'ファイルを選択'; b.onclick = () => this.pickFile(object); panel.append(b); this.field(panel,'メディア','ファイル名','fileName','text',objects); this.field(panel,'メディア','表示方法','fit','select',objects,[['contain','全体を表示'],['cover','領域を埋める'],['fill','引き伸ばす']]); this.field(panel,'メディア','縦横比維持','keepRatio','checkbox',objects); if (object.type === 'video') { this.field(panel,'再生','繰り返し','loop','checkbox',objects); this.field(panel,'再生','ミュート','muted','checkbox',objects); this.field(panel,'再生','コントロール','controls','checkbox',objects); } }
+      if (object.type === 'player') { const b = document.createElement('button'); b.textContent = 'フォルダを選択'; b.onclick = () => this.pickFolder(object); panel.append(b); for (const f of [['メディア','フォルダ名','folderName','text'],['メディア','画像数','imageCount','number'],['メディア','動画数','videoCount','number'],['メディア','合計件数','totalCount','number'],['メディア','最終更新','lastRefreshAt','text'],['メディア','状態','lastRefreshStatus','text']]) this.field(panel,...f,objects); this.field(panel,'再生','順番','order','select',objects,[['name','ファイル名順'],['random','ランダム']]); this.field(panel,'再生','繰り返し','repeat','checkbox',objects); this.field(panel,'再生','画像秒数','imageSeconds','number',objects); this.field(panel,'再生','動画ミュート','muted','checkbox',objects); this.field(panel,'再生','表示方法','fit','select',objects,[['contain','全体'],['cover','埋める'],['fill','引き伸ばす']]); this.field(panel,'再生','効果','effect','select',objects,[['none','なし'],['fade','フェード']]); this.field(panel,'詳細','サブフォルダ','subfolders','checkbox',objects); this.field(panel,'詳細','自動更新','autoRefresh','checkbox',objects); this.field(panel,'詳細','更新分','refreshMinutes','number',objects); const r = document.createElement('button'); r.textContent = '手動更新'; r.onclick = () => this.refreshFolder(object); panel.append(r); }
+      if (object.type === 'shape') { this.field(panel,'背景と枠線','形','shape','select',objects,[['rect','長方形'],['round','角丸長方形'],['line','直線']]); this.field(panel,'背景と枠線','塗り','style.fill','color',objects); this.field(panel,'背景と枠線','塗り透明度','style.fillAlpha','number',objects); this.field(panel,'背景と枠線','線色','style.stroke','color',objects); this.field(panel,'背景と枠線','線幅','style.strokeWidth','number',objects); this.field(panel,'背景と枠線','角丸','style.radius','number',objects); this.field(panel,'背景と枠線','直線太さ','style.lineWidth','number',objects); }
+    }
+    field(panel, sectionName, label, path, type, objects, options = []) {
+      let section = panel.querySelector(`[data-section="${sectionName}"]`);
+      if (!section) {
+        section = document.createElement('details'); section.open = true; section.className = 'section'; section.dataset.section = sectionName;
+        const summary = document.createElement('summary'); summary.textContent = sectionName;
+        const body = document.createElement('div'); body.className = 'section-body'; section.append(summary, body); panel.append(section);
+      }
+      const wrap = document.createElement('label'); wrap.className = 'field';
+      const span = document.createElement('span'); span.textContent = label;
+      let input;
+      if (type === 'textarea') input = document.createElement('textarea');
+      else if (type === 'select') { input = document.createElement('select'); for (const [value, text] of options) { const option = document.createElement('option'); option.value = value; option.textContent = text; input.append(option); } }
+      else { input = document.createElement('input'); input.type = type; if (type === 'number') input.step = 'any'; }
+      const value = this.get(objects[0], path);
+      if (type === 'checkbox') input.checked = Boolean(value); else input.value = value ?? '';
+      input.onchange = () => {
+        this.push();
+        const safe = this.safeValue(path, type, input);
+        for (const object of objects) { this.set(object, path, safe); Object.assign(object, this.normalizeObject(object)); }
+        this.renderAll();
+        this.dirty();
+      };
+      wrap.append(span, input);
+      section.querySelector('.section-body').append(wrap);
+    }
+    safeValue(path, type, input) {
+      if (type === 'checkbox') return input.checked;
+      if (type === 'color') { const safe = color(input.value); input.value = safe; return safe; }
+      if (type !== 'number') return input.value;
+      let value = Number(input.value);
+      if (path === 'w' || path === 'h') value = clamp(value, 20, W * 2, 100);
+      else if (path === 'x') value = clamp(value, -W, W - 20, 0);
+      else if (path === 'y') value = clamp(value, -H, H - 20, 0);
+      else if (path === 'opacity' || path.endsWith('Alpha')) value = clamp(value, 0, 1, 1);
+      else if (path.includes('fontSize')) value = clamp(value, 8, 500, 72);
+      else if (path.includes('pad') || path.includes('radius')) value = clamp(value, 0, 500, 0);
+      else if (path.includes('strokeWidth') || path.includes('lineWidth')) value = clamp(value, 0, 100, 1);
+      else if (path === 'imageSeconds') value = clamp(value, 1, 86400, 5);
+      else if (path === 'refreshMinutes') value = clamp(value, 1, 1440, 5);
+      else if (path === 'rot') value = clamp(value, -3600, 3600, 0);
+      else value = clamp(value, -999999999, 999999999, 0);
+      input.value = value;
+      return value;
+    }
+    get(object, path) { return path.split('.').reduce((target, key) => target && target[key], object); }
+    set(object, path, value) { const parts = path.split('.'); let target = object; while (parts.length > 1) target = target[parts.shift()]; target[parts[0]] = value; }
+    async pickFile(object) {
+      const input = document.createElement('input'); input.type = 'file'; input.accept = object.type === 'image' ? 'image/*' : 'video/*';
+      input.onchange = () => { if (!input.files || !input.files[0]) return; this.push(); this.urls.revoke(`edit:${object.id}:single`); this.urls.revoke(`view:${object.id}:single`); object.file = input.files[0]; object.fileName = object.file.name; this.renderAll(); this.dirty(); };
+      input.click();
+    }
+    async pickFolder(object) {
+      if (!window.showDirectoryPicker) { toast('このブラウザではフォルダ選択を利用できません'); return; }
+      try { const handle = await showDirectoryPicker(); this.push(); object.folderId = uid(); object.folderName = handle.name; await this.db.put(HANDLES, object.folderId, handle); await this.refreshFolder(object); } catch (error) { toast('フォルダ選択を中止しました'); }
+    }
+    async refreshFolder(object) { const files = await this.scanPlayer(object, true); object.files = files.map((file) => ({ name: file.name, type: IMG.test(file.name) ? 'image' : 'video' })); this.renderAll(); this.dirty(); }
+    async scanPlayer(object, update) {
+      try {
+        const handle = await this.db.get(HANDLES, object.folderId);
+        if (!handle) { if (update) object.lastRefreshStatus = 'フォルダを再選択してください'; return []; }
+        const files = [];
+        await this.scanDir(handle, files, object.subfolders);
+        files.sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
+        if (update) { object.folderName = handle.name; object.imageCount = files.filter((file) => IMG.test(file.name)).length; object.videoCount = files.filter((file) => VID.test(file.name)).length; object.totalCount = files.length; object.lastRefreshAt = new Date().toLocaleString(); object.lastRefreshStatus = files.length ? '更新済み' : '再生可能なファイルがありません'; toast('フォルダを更新しました'); }
+        return files;
+      } catch (error) {
+        if (update) { object.lastRefreshAt = new Date().toLocaleString(); object.lastRefreshStatus = '読込失敗または権限切れ'; toast('フォルダを読み込めません。再選択してください'); }
+        return [];
+      }
+    }
+    async scanDir(dir, files, subfolders) {
+      for await (const [name, handle] of dir.entries()) {
+        if (handle.kind === 'file' && (IMG.test(name) || VID.test(name))) files.push(await handle.getFile());
+        else if (subfolders && handle.kind === 'directory') await this.scanDir(handle, files, true);
+      }
+    }
+    doubleClick(object) { if (object.type !== 'text') return; const text = prompt('テキスト内容', object.text); if (text !== null) { this.push(); object.text = text; this.renderAll(); this.dirty(); } }
+    keys(event) {
+      if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+      if (event.key === 'Escape') { if (this.viewing) this.stopView(); else { this.sel = []; this.renderAll(); } }
+      if (event.key === 'Delete' && this.sel.length) this.deleteSelection();
+      if (event.ctrlKey && event.key.toLowerCase() === 'c') { this.clip = this.current.objects.filter((object) => this.sel.includes(object.id)).map(copy); event.preventDefault(); this.commands(); }
+      if (event.ctrlKey && event.key.toLowerCase() === 'v') { this.paste(); event.preventDefault(); }
+      if (event.ctrlKey && event.key.toLowerCase() === 'd') { this.clip = this.current.objects.filter((object) => this.sel.includes(object.id)).map(copy); this.paste(); event.preventDefault(); }
+      if (event.ctrlKey && event.key.toLowerCase() === 'z') { this.undo(); event.preventDefault(); }
+      if (event.ctrlKey && event.key.toLowerCase() === 'y') { this.redo(); event.preventDefault(); }
+      if (event.ctrlKey && event.key.toLowerCase() === 'a') { this.sel = this.current.objects.map((object) => object.id); this.renderAll(); event.preventDefault(); }
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)) this.nudge(event);
+    }
+    deleteSelection() { this.push(); for (const id of this.sel) { this.urls.revoke(`edit:${id}:single`); this.urls.revoke(`view:${id}:single`); } this.current.objects = this.current.objects.filter((object) => !this.sel.includes(object.id) || object.locked); this.sel = []; this.renderAll(); this.dirty(); }
+    paste() { if (!this.clip.length) return; this.push(); const ids = []; for (const source of this.clip) { const object = copy(source); object.id = uid(); object.name = `${object.name} コピー`; object.x += 30; object.y += 30; ids.push(object.id); this.current.objects.push(object); } this.sel = ids; this.renderAll(); this.dirty(); }
+    undo() { const prev = this.undoStack.pop(); if (!prev) return; this.urls.revokeAll(); this.redoStack.push(copy(this.state)); this.state = this.normalizeState(prev); this.sel = []; this.renderAll(); this.dirty(); }
+    redo() { const next = this.redoStack.pop(); if (!next) return; this.urls.revokeAll(); this.undoStack.push(copy(this.state)); this.state = this.normalizeState(next); this.sel = []; this.renderAll(); this.dirty(); }
+    nudge(event) { if (!this.sel.length) return; this.push(); const amount = event.shiftKey ? 10 : 1; for (const object of this.current.objects) { if (!this.sel.includes(object.id) || object.locked) continue; if (event.key === 'ArrowLeft') object.x -= amount; if (event.key === 'ArrowRight') object.x += amount; if (event.key === 'ArrowUp') object.y -= amount; if (event.key === 'ArrowDown') object.y += amount; object.x = clamp(object.x, -object.w + 20, W - 20, object.x); object.y = clamp(object.y, -object.h + 20, H - 20, object.y); } this.renderAll(); this.dirty(); event.preventDefault(); }
+    z(action) { if (!this.sel.length) return; this.push(); for (const object of this.current.objects.filter((item) => this.sel.includes(item.id))) { if (action === 'front') object.z = Date.now() + Math.random() * 1000; if (action === 'back') object.z = 0; if (action === 'forward') object.z += 1000; if (action === 'backward') object.z -= 1000; } this.renderAll(); this.dirty(); }
+    align(action) { const objects = this.current.objects.filter((object) => this.sel.includes(object.id)); if (action === 'centerCanvas' ? !objects.length : (action === 'distH' || action === 'distV') ? objects.length < 3 : objects.length < 2) return; this.push(); const minX = Math.min(...objects.map((o) => o.x)); const maxR = Math.max(...objects.map((o) => o.x + o.w)); const minY = Math.min(...objects.map((o) => o.y)); const maxB = Math.max(...objects.map((o) => o.y + o.h)); for (const o of objects) { if (action === 'centerCanvas') { o.x = (W - o.w) / 2; o.y = (H - o.h) / 2; } if (action === 'alignLeft') o.x = minX; if (action === 'alignRight') o.x = maxR - o.w; if (action === 'alignCenter') o.x = (minX + maxR - o.w) / 2; if (action === 'alignTop') o.y = minY; if (action === 'alignBottom') o.y = maxB - o.h; if (action === 'alignMiddle') o.y = (minY + maxB - o.h) / 2; } if (action === 'distH') { objects.sort((a,b)=>a.x-b.x); const gap = (maxR - minX - objects.reduce((s,o)=>s+o.w,0)) / (objects.length - 1); let x = minX; for (const o of objects) { o.x = x; x += o.w + gap; } } if (action === 'distV') { objects.sort((a,b)=>a.y-b.y); const gap = (maxB - minY - objects.reduce((s,o)=>s+o.h,0)) / (objects.length - 1); let y = minY; for (const o of objects) { o.y = y; y += o.h + gap; } } this.renderAll(); this.dirty(); }
+    addScene() { this.push(); this.state.scenes.push(this.scene('新しいシーン')); this.state.lastScene = this.state.scenes.length - 1; this.sel = []; this.renderAll(); this.dirty(); }
+    dupScene() { this.push(); const scene = copy(this.current); scene.id = uid(); scene.name = `${scene.name} コピー`; for (const object of scene.objects) object.id = uid(); this.state.scenes.splice(this.state.lastScene + 1, 0, scene); this.state.lastScene += 1; this.sel = []; this.renderAll(); this.dirty(); }
+    delScene() { if (this.state.scenes.length < 2) { toast('最後のシーンは削除できません'); return; } if (!confirm('シーンを削除しますか？')) return; this.push(); this.state.scenes.splice(this.state.lastScene, 1); this.state.lastScene = Math.max(0, this.state.lastScene - 1); this.sel = []; this.renderAll(); this.dirty(); }
+    moveScene(delta) { const from = this.state.lastScene; const to = from + delta; if (to < 0 || to >= this.state.scenes.length) return; this.push(); [this.state.scenes[from], this.state.scenes[to]] = [this.state.scenes[to], this.state.scenes[from]]; this.state.lastScene = to; this.renderAll(); this.dirty(); }
+    switchScene(index) { if (index < 0 || index >= this.state.scenes.length) return; this.urls.revokePrefix('edit:'); this.state.lastScene = index; this.sel = []; this.renderAll(); this.dirty(); }
+    async startView() {
+      await this.save(true);
+      this.viewing = true;
+      $('#viewer').style.display = 'flex';
+      this.renderViewScene();
+      this.fitView();
+      this.bumpCursor();
+      try { await $('#viewer').requestFullscreen(); } catch (error) { toast('全画面表示できませんでした。通常表示で継続します。'); }
+    }
+    renderViewScene() { this.stopViewScene(); this.urls.revokePrefix('view:'); this.renderCanvas($('#viewCanvas'), true); this.scheduleScene(); }
+    stopViewScene() {
+      clearTimeout(this.sceneTimer);
+      this.sceneTimer = null;
+      for (const session of this.sessions) session.stop();
+      this.sessions = [];
+      for (const video of $('#viewCanvas').querySelectorAll('video')) { video.onended = null; video.onerror = null; video.pause(); video.removeAttribute('src'); video.load(); }
+      $('#viewCanvas').textContent = '';
+      this.urls.revokePrefix('view:');
+    }
+    scheduleScene() {
+      if (this.state.ui.sceneMode === 'none' || this.state.scenes.length < 2) return;
+      const seconds = clamp(this.current.duration, 1, 86400, 10);
+      this.current.duration = seconds;
+      this.sceneTimer = setTimeout(() => this.advanceScene(), seconds * 1000);
+    }
+    advanceScene() {
+      if (!this.viewing) return;
+      let next = this.state.lastScene + 1;
+      if (this.state.ui.sceneMode === 'random') {
+        if (this.state.scenes.length < 2) return;
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          const candidate = Math.floor(Math.random() * this.state.scenes.length);
+          if (candidate !== this.state.lastScene) { next = candidate; break; }
+        }
+      }
+      if (next >= this.state.scenes.length) next = 0;
+      this.state.lastScene = next;
+      this.renderViewScene();
+    }
+    stopView() {
+      if (!this.viewing || this.stopping) return;
+      this.stopping = true;
+      this.viewing = false;
+      this.stopViewScene();
+      clearTimeout(this.cursorTimer);
+      $('#viewer').classList.remove('hide-cursor');
+      $('#viewer').style.display = 'none';
+      const finish = () => { this.stopping = false; this.renderAll(); };
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => undefined).finally(finish);
+      else finish();
+    }
+    fullscreenChanged() { if (this.viewing && !document.fullscreenElement && !this.stopping) this.stopView(); }
+    bumpCursor() { $('#viewer').classList.remove('hide-cursor'); clearTimeout(this.cursorTimer); this.cursorTimer = setTimeout(() => $('#viewer').classList.add('hide-cursor'), 3000); }
+    fit() { const workspace = $('#workspace'); this.scale = Math.min((workspace.clientWidth - 40) / W, (workspace.clientHeight - 40) / H, 1); $('#canvas').style.transform = `scale(${this.scale})`; $('#canvasWrap').style.width = `${W * this.scale}px`; $('#canvasWrap').style.height = `${H * this.scale}px`; $('#zoomText').textContent = `${Math.round(this.scale * 100)}% / 1920×1080`; }
+    fitView() { if (!this.viewing) return; $('#viewCanvas').style.transform = `scale(${Math.min(innerWidth / W, innerHeight / H)})`; }
+    clockText(object) { const d = new Date(); const wd = '日月火水木金土'[d.getDay()]; const p = (n) => String(n).padStart(2, '0'); if (object.format === 'HH:mm') return `${p(d.getHours())}:${p(d.getMinutes())}`; if (object.format === 'HH:mm:ss') return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; if (object.format === 'yyyy年M月d日') return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日`; if (object.format === 'yyyy年M月d日（曜）') return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wd}）`; return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${wd}） ${p(d.getHours())}:${p(d.getMinutes())}`; }
+    updateClocks() { for (const el of document.querySelectorAll('.object-shell')) { const object = this.current.objects.find((item) => item.id === el.dataset.id); const clock = el.querySelector('.clock-text'); if (object && clock) clock.textContent = this.clockText(object); } }
+    resetDoc(message) { if (!confirm(message)) return; this.stopView(); this.urls.revokeAll(); clearTimeout(this.autosave); this.state = this.fresh(); this.sel = []; this.clip = []; this.clearHistory(); this.renderAll(); this.save(true); }
+    exportJson() { const data = copy(this.state); data.note = 'JSONにはフォルダ権限、ローカルメディアファイルの実体、単一ファイルの永続的な参照は含まれません。復元後に再指定してください。'; const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = 'isignage-backup.json'; a.click(); URL.revokeObjectURL(url); }
+    async importJson(event) { const file = event.target.files && event.target.files[0]; if (!file) return; try { const parsed = JSON.parse(await file.text()); const normalized = this.normalizeState(parsed); if (!normalized.scenes.length) throw new Error('invalid'); this.urls.revokeAll(); this.push(); this.state = normalized; this.sel = []; this.renderAll(); this.dirty(); toast('読み込みました。フォルダと単一ファイルは必要に応じて再指定してください'); } catch (error) { toast('JSONを読み込めませんでした。現在の編集内容は保持されています'); } finally { event.target.value = ''; } }
+    commands() { const count = this.sel.length; for (const b of document.querySelectorAll('[data-needs-selection]')) b.disabled = count === 0; for (const b of document.querySelectorAll('[data-needs-multi]')) b.disabled = count < 2; for (const b of document.querySelectorAll('[data-needs-three]')) b.disabled = count < 3; $('#delScene').disabled = this.state.scenes.length < 2; $('#sceneUp').disabled = this.state.lastScene === 0; $('#sceneDown').disabled = this.state.lastScene >= this.state.scenes.length - 1; $('#prevScene').disabled = this.state.lastScene === 0; $('#nextScene').disabled = this.state.lastScene >= this.state.scenes.length - 1; }
+  }
+  window.app = new App();
+})();
+</script>
+</body>
+</html>
