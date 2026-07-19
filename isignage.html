@@ -620,7 +620,11 @@
           async start() {
             this.files = await this.app.scanPlayer(this.object, false);
             if (this.files === null) {
-              this.files = [];
+              this.fallback(
+                "フォルダを読み込めません。\nフォルダを再選択するか権限を確認してください。",
+              );
+              this.startAutoRefresh();
+              return;
             }
             this.startAutoRefresh();
             if (!this.files.length) {
@@ -826,9 +830,12 @@
           }
           bind() {
             $("#saveBtn").onclick = () => this.save();
-            $("#newBtn").onclick = () => this.resetDoc("新規作成しますか？");
-            $("#resetBtn").onclick = () =>
-              this.resetDoc("初期状態へ戻しますか？");
+            $("#newBtn").onclick = () => {
+              this.resetDoc("新規作成しますか？").catch(() => undefined);
+            };
+            $("#resetBtn").onclick = () => {
+              this.resetDoc("初期状態へ戻しますか？").catch(() => undefined);
+            };
             $("#exportBtn").onclick = () => this.exportJson();
             $("#importBtn").onclick = () => $("#importFile").click();
             $("#importFile").onchange = (event) => this.importJson(event);
@@ -2152,14 +2159,12 @@
               return;
             }
             try {
-              const oldFolderId = object.folderId;
               const handle = await showDirectoryPicker();
               const newFolderId = uid();
               await this.db.put(HANDLES, newFolderId, handle);
               this.push();
               object.folderId = newFolderId;
               object.folderName = handle.name;
-              await this.deleteHandleIfUnused(oldFolderId, object.id);
               await this.refreshFolder(object);
             } catch (error) {
               toast("フォルダ選択を中止しました");
@@ -2167,6 +2172,11 @@
           }
           async refreshFolder(object) {
             const files = await this.scanPlayer(object, true);
+            if (files === null) {
+              this.renderAll();
+              this.dirty();
+              return;
+            }
             object.files = files.map((file) => ({
               name: file.name,
               relativePath: file.relativePath || file.name,
@@ -2177,11 +2187,17 @@
           }
           async scanPlayer(object, update) {
             try {
+              if (!object.folderId) {
+                if (update) {
+                  object.lastRefreshStatus = "フォルダを選択してください";
+                }
+                return null;
+              }
               const handle = await this.db.get(HANDLES, object.folderId);
               if (!handle) {
                 if (update)
                   object.lastRefreshStatus = "フォルダを再選択してください";
-                return [];
+                return null;
               }
               const files = [];
               await this.scanDir(handle, files, object.subfolders, "");
@@ -2212,7 +2228,7 @@
                 object.lastRefreshStatus = "読込失敗または権限切れ";
                 toast("フォルダを読み込めません。再選択してください");
               }
-              return update ? [] : null;
+              return null;
             }
           }
           async scanDir(dir, files, subfolders, basePath) {
@@ -2315,11 +2331,6 @@
             this.sel = [];
             this.renderAll();
             this.dirty();
-            for (const object of removable) {
-              if (object.type === "player") {
-                this.deleteHandleIfUnused(object.folderId);
-              }
-            }
           }
           paste() {
             if (!this.clip.length) return;
@@ -2477,19 +2488,11 @@
               return;
             }
             this.push();
-            const removed = this.state.scenes.splice(
-              this.state.lastScene,
-              1,
-            )[0];
+            this.state.scenes.splice(this.state.lastScene, 1);
             this.state.lastScene = Math.max(0, this.state.lastScene - 1);
             this.sel = [];
             this.renderAll();
             this.dirty();
-            for (const object of removed.objects || []) {
-              if (object.type === "player") {
-                this.deleteHandleIfUnused(object.folderId);
-              }
-            }
           }
           moveScene(delta) {
             const from = this.state.lastScene;
@@ -2651,6 +2654,8 @@
             }
           }
           folderIdInUse(folderId, exceptObjectId = null) {
+            // Undo/Redo履歴が残っている通常操作中はハンドル削除に使わない。
+            // 履歴破棄後の明示的な整理処理を追加する場合のために残している。
             if (!folderId) {
               return false;
             }
@@ -2678,7 +2683,7 @@
               }
             }
           }
-          resetDoc(message) {
+          async resetDoc(message) {
             if (!confirm(message)) {
               return;
             }
@@ -2689,9 +2694,13 @@
             this.sel = [];
             this.clip = [];
             this.clearHistory();
+            try {
+              await this.db.clear(HANDLES);
+            } catch (error) {
+              // 初期化自体は継続する。
+            }
+            await this.save(true);
             this.renderAll();
-            this.save(true);
-            this.db.clear(HANDLES);
           }
           exportJson() {
             const data = {
@@ -2732,7 +2741,6 @@
               this.sel = [];
               this.renderAll();
               this.dirty();
-              this.cleanupUnusedHandles();
               toast(
                 "読み込みました。フォルダと単一ファイルは必要に応じて再指定してください",
               );
