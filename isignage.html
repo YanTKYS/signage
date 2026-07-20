@@ -47,6 +47,13 @@
         cursor: not-allowed;
         opacity: 0.45;
       }
+      button:focus-visible,
+      input:focus-visible,
+      select:focus-visible,
+      textarea:focus-visible {
+        outline: 3px solid #f59e0b;
+        outline-offset: 2px;
+      }
       .primary {
         border-color: var(--blue);
         background: var(--blue);
@@ -108,6 +115,17 @@
         min-width: 0;
         overflow: hidden;
         background: #e8edf5;
+      }
+      .scene-open-tab {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        z-index: 1000;
+        display: none;
+        box-shadow: var(--shadow);
+      }
+      .collapsed .scene-open-tab {
+        display: inline-flex;
       }
       .canvas-wrap {
         position: relative;
@@ -325,6 +343,85 @@
       .collapsed .main {
         grid-template-columns: 1fr 330px;
       }
+
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 40000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: #0f172acc;
+      }
+      .modal-overlay.open {
+        display: flex;
+      }
+      .modal-card {
+        width: min(920px, 100%);
+        max-height: min(86vh, 900px);
+        overflow: auto;
+        border-radius: 16px;
+        background: #fff;
+        color: var(--text);
+        box-shadow: 0 24px 70px #0008;
+      }
+      .modal-header,
+      .modal-footer {
+        position: sticky;
+        z-index: 1;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        background: #fff;
+      }
+      .modal-header {
+        top: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .modal-footer {
+        bottom: 0;
+        flex-wrap: wrap;
+        border-top: 1px solid var(--line);
+      }
+      .modal-body {
+        display: grid;
+        gap: 18px;
+        padding: 20px;
+        line-height: 1.65;
+      }
+      .modal-body h3 {
+        margin: 0 0 8px;
+      }
+      .modal-body ol,
+      .modal-body ul {
+        margin: 0;
+        padding-left: 1.5em;
+      }
+      .shortcut-wrap {
+        overflow-x: auto;
+      }
+      .shortcut-wrap table {
+        width: 100%;
+        min-width: 520px;
+        border-collapse: collapse;
+      }
+      .shortcut-wrap th,
+      .shortcut-wrap td {
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        text-align: left;
+      }
+      .guide-actions {
+        justify-content: flex-end;
+      }
+      .guide-check {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+      }
       input[type="file"] {
         display: none;
       }
@@ -342,6 +439,7 @@
           <button id="exportBtn">JSON出力</button>
           <button id="importBtn">JSON読込</button>
           <button id="resetBtn" class="danger">初期化</button>
+          <button id="helpBtn" title="操作説明を同じ画面内に表示します">? ヘルプ</button>
           <input id="importFile" type="file" accept="application/json" />
         </div>
         <button id="playBtn" class="primary">▶ 表示開始</button>
@@ -416,7 +514,7 @@
       <div class="main">
         <aside class="left">
           <div class="row">
-            <button id="toggleScenes">折りたたみ</button
+            <button id="toggleScenes" title="左のシーン欄を閉じます">‹ シーン欄を閉じる</button
             ><button id="addScene">追加</button
             ><button id="dupScene">複製</button
             ><button id="delScene" class="danger">削除</button>
@@ -448,6 +546,14 @@
           </details>
         </aside>
         <main class="workspace" id="workspace">
+          <button
+            id="openScenes"
+            class="scene-open-tab"
+            title="左のシーン欄を開きます"
+            aria-label="シーン欄を開く"
+          >
+            › シーン欄を開く
+          </button>
           <div class="canvas-wrap" id="canvasWrap">
             <div id="canvas" class="canvas"></div>
             <div id="empty" class="empty-message">
@@ -468,6 +574,134 @@
       <div id="viewCanvas" class="view-canvas"></div>
     </div>
     <div id="toast" class="toast"></div>
+    <div
+      id="helpModal"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="helpTitle"
+    >
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="helpTitle">iSignage ヘルプ</h2>
+          <button class="modal-close" data-close-modal>閉じる</button>
+        </div>
+        <div class="modal-body">
+          <section>
+            <h3>1. はじめに</h3>
+            <ol>
+              <li>上部からテキストやメディアを追加します</li>
+              <li>キャンバス上で位置と大きさを調整します</li>
+              <li>選択中のオブジェクトは右側で設定します</li>
+              <li>完成したら「表示開始」を押します</li>
+            </ol>
+          </section>
+          <section>
+            <h3>2. オブジェクトの配置</h3>
+            <ul>
+              <li>上部のボタンから追加し、クリックで選択、ドラッグで移動します。</li>
+              <li>選択枠のハンドルでサイズを変え、右側のプロパティ欄で数値や表示を変更できます。</li>
+              <li>複数選択、整列、ロックに対応しています。ロックしたオブジェクトは移動・削除できません。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>3. メディアフォルダ</h3>
+            <ul>
+              <li>「メディア」を追加し、右側でフォルダを選択します。</li>
+              <li>画像と動画を混在して、ファイル名順またはランダムで再生できます。</li>
+              <li>画像は設定秒数、動画は再生終了後に次へ進みます。</li>
+              <li>自動更新を使うと表示中にフォルダを再走査します。権限切れ時は再選択してください。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>4. シーン</h3>
+            <ul>
+              <li>通常は1シーンのまま利用できます。必要な場合だけ追加してください。</li>
+              <li>シーンごとに背景色と表示秒数を設定できます。</li>
+              <li>切替方法は「切り替えない」「指定秒数ごと」「ランダム」から選べます。</li>
+              <li>シーン欄は折りたため、左端のボタンで戻せます。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>5. 表示開始</h3>
+            <ul>
+              <li>「表示開始」で編集UIを隠し、全画面表示を要求します。</li>
+              <li>全画面表示に失敗しても通常表示で継続します。</li>
+              <li>Escで編集画面へ戻ります。マウスポインターは一定時間後に隠れます。</li>
+              <li>動画は既定でミュートです。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>6. 保存とバックアップ</h3>
+            <ul>
+              <li>編集内容は自動保存され、「保存」で手動保存できます。</li>
+              <li>JSON出力は設定のバックアップです。画像・動画本体やフォルダのアクセス権限は含まれません。</li>
+              <li>別端末ではメディアを再指定してください。新規作成・初期化は現在内容を破棄します。</li>
+            </ul>
+          </section>
+          <section>
+            <h3>7. 主なショートカット</h3>
+            <div class="shortcut-wrap">
+              <table>
+                <thead><tr><th>操作</th><th>ショートカット</th></tr></thead>
+                <tbody>
+                  <tr><td>削除</td><td>Delete</td></tr>
+                  <tr><td>コピー</td><td>Ctrl+C</td></tr>
+                  <tr><td>貼り付け</td><td>Ctrl+V</td></tr>
+                  <tr><td>複製</td><td>Ctrl+D</td></tr>
+                  <tr><td>元に戻す</td><td>Ctrl+Z</td></tr>
+                  <tr><td>やり直す</td><td>Ctrl+Y</td></tr>
+                  <tr><td>全選択</td><td>Ctrl+A</td></tr>
+                  <tr><td>1px移動</td><td>矢印キー</td></tr>
+                  <tr><td>10px移動</td><td>Shift＋矢印キー</td></tr>
+                  <tr><td>選択解除</td><td>Esc</td></tr>
+                  <tr><td>範囲選択</td><td>キャンバス空白をドラッグ</td></tr>
+                  <tr><td>複数選択</td><td>Ctrl＋クリック</td></tr>
+                  <tr><td>表示終了</td><td>Esc</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section>
+            <h3>8. 注意事項</h3>
+            <ul>
+              <li>正式対応はEdge／Chromeです。Firefox／Safariはフォルダ選択を正式対象外とします。</li>
+              <li>ブラウザや端末の設定により全画面や自動再生が制限される場合があります。</li>
+              <li>音声付き動画は自動再生できない場合があります。</li>
+              <li>長期運用では単一画像・動画よりメディアフォルダを推奨します。</li>
+              <li>フォルダ権限が失われた場合は再選択してください。</li>
+            </ul>
+          </section>
+        </div>
+        <div class="modal-footer"><button data-close-modal>閉じる</button></div>
+      </div>
+    </div>
+    <div
+      id="guideModal"
+      class="modal-overlay"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="guideTitle"
+    >
+      <div class="modal-card">
+        <div class="modal-header"><h2 id="guideTitle">iSignageへようこそ</h2></div>
+        <div class="modal-body">
+          <ol>
+            <li>上部からテキストやメディアを追加します</li>
+            <li>配置したオブジェクトを選ぶと右側で設定できます</li>
+            <li>完成したら「表示開始」を押します</li>
+          </ol>
+          <p>編集内容は自動保存されます。画像や動画をまとめて再生する場合は「メディア」を使います。</p>
+        </div>
+        <div class="modal-footer guide-actions">
+          <label class="guide-check">
+            <input id="dismissGuideChk" type="checkbox" />次回から表示しない
+          </label>
+          <button id="guideHelpBtn">使い方を見る</button>
+          <button id="guideStartBtn" class="primary">はじめる</button>
+        </div>
+      </div>
+    </div>
     <script>
       (() => {
         "use strict";
@@ -763,6 +997,137 @@
             this.container.append(div);
           }
         }
+
+        const BASE_PROPERTY_FIELDS = [
+          ["位置とサイズ", "名前", "name", "text"],
+          ["位置とサイズ", "X", "x", "number"],
+          ["位置とサイズ", "Y", "y", "number"],
+          ["位置とサイズ", "幅", "w", "number"],
+          ["位置とサイズ", "高さ", "h", "number"],
+          ["位置とサイズ", "回転", "rot", "number"],
+          ["位置とサイズ", "透明度", "opacity", "number"],
+          ["表示", "ロック", "locked", "checkbox"],
+          ["表示", "表示", "visible", "checkbox"],
+        ];
+        const ALIGN_OPTIONS = [
+          ["left", "左"],
+          ["center", "中央"],
+          ["right", "右"],
+        ];
+        const FIT_OPTIONS = [
+          ["contain", "全体を表示"],
+          ["cover", "領域を埋める"],
+          ["fill", "引き伸ばす"],
+        ];
+        const PLAYER_FIT_OPTIONS = [
+          ["contain", "全体"],
+          ["cover", "埋める"],
+          ["fill", "引き伸ばす"],
+        ];
+        const PROPERTY_FIELDS_BY_TYPE = {
+          text: [
+            ["文字", "内容", "text", "textarea"],
+            ["文字", "サイズ", "style.fontSize", "number"],
+            ["文字", "太字", "style.bold", "checkbox"],
+            ["文字", "文字色", "style.color", "color"],
+            ["文字", "横揃え", "style.align", "select", ALIGN_OPTIONS],
+            [
+              "文字",
+              "縦揃え",
+              "style.valign",
+              "select",
+              [
+                ["top", "上"],
+                ["center", "中央"],
+                ["bottom", "下"],
+              ],
+            ],
+            ["背景と枠線", "背景色", "style.bgColor", "color"],
+            ["背景と枠線", "背景透明度", "style.bgAlpha", "number"],
+            ["背景と枠線", "余白", "style.pad", "number"],
+            ["背景と枠線", "枠線", "style.border", "checkbox"],
+            ["背景と枠線", "枠線色", "style.borderColor", "color"],
+            ["背景と枠線", "角丸", "style.radius", "number"],
+          ],
+          clock: [
+            [
+              "文字",
+              "形式",
+              "format",
+              "select",
+              [
+                ["HH:mm", "HH:mm"],
+                ["HH:mm:ss", "HH:mm:ss"],
+                ["yyyy年M月d日", "yyyy年M月d日"],
+                ["yyyy年M月d日（曜）", "yyyy年M月d日（曜）"],
+                ["datetime", "日付＋時刻"],
+              ],
+            ],
+            ["文字", "サイズ", "style.fontSize", "number"],
+            ["文字", "文字色", "style.color", "color"],
+            ["文字", "背景色", "style.bgColor", "color"],
+            ["文字", "背景透明度", "style.bgAlpha", "number"],
+            ["文字", "配置", "style.align", "select", ALIGN_OPTIONS],
+          ],
+          image: [
+            ["メディア", "ファイル名", "fileName", "readonly"],
+            ["メディア", "表示方法", "fit", "select", FIT_OPTIONS],
+            ["メディア", "縦横比維持", "keepRatio", "checkbox"],
+          ],
+          video: [
+            ["メディア", "ファイル名", "fileName", "readonly"],
+            ["メディア", "表示方法", "fit", "select", FIT_OPTIONS],
+            ["メディア", "縦横比維持", "keepRatio", "checkbox"],
+            ["再生", "繰り返し", "loop", "checkbox"],
+            ["再生", "ミュート", "muted", "checkbox"],
+            ["再生", "コントロール", "controls", "checkbox"],
+          ],
+          player: [
+            ["メディア", "フォルダ名", "folderName", "readonly"],
+            ["メディア", "画像数", "imageCount", "readonly"],
+            ["メディア", "動画数", "videoCount", "readonly"],
+            ["メディア", "合計件数", "totalCount", "readonly"],
+            ["メディア", "最終更新", "lastRefreshAt", "readonly"],
+            ["メディア", "状態", "lastRefreshStatus", "readonly"],
+            [
+              "再生",
+              "順番",
+              "order",
+              "select",
+              [
+                ["name", "ファイル名順"],
+                ["random", "ランダム"],
+              ],
+            ],
+            ["再生", "繰り返し", "repeat", "checkbox"],
+            ["再生", "画像秒数", "imageSeconds", "number"],
+            ["再生", "動画ミュート", "muted", "checkbox"],
+            ["再生", "表示方法", "fit", "select", PLAYER_FIT_OPTIONS],
+            ["詳細", "サブフォルダ", "subfolders", "checkbox"],
+            ["詳細", "自動更新", "autoRefresh", "checkbox"],
+            ["詳細", "更新分", "refreshMinutes", "number"],
+          ],
+          shape: [
+            [
+              "背景と枠線",
+              "形",
+              "shape",
+              "select",
+              [
+                ["rect", "長方形"],
+                ["round", "角丸長方形"],
+                ["line", "直線"],
+              ],
+            ],
+            ["背景と枠線", "塗り", "style.fill", "color"],
+            ["背景と枠線", "塗り透明度", "style.fillAlpha", "number"],
+            ["背景と枠線", "線色", "style.stroke", "color"],
+            ["背景と枠線", "線幅", "style.strokeWidth", "number"],
+            ["背景と枠線", "角丸", "style.radius", "number"],
+            ["背景と枠線", "直線太さ", "style.lineWidth", "number"],
+          ],
+        };
+
         class App {
           constructor() {
             this.db = new DBM();
@@ -789,6 +1154,8 @@
                 guides: false,
                 snap: false,
                 sceneMode: "none",
+                scenesCollapsed: false,
+                firstRunGuideDismissed: false,
               },
               scenes: [this.scene("通常画面")],
             };
@@ -811,7 +1178,8 @@
             try {
               await this.db.open();
               const saved = await this.db.get(STORE, "doc");
-              if (saved) this.state = this.normalizeState(saved);
+              this.hasSavedDoc = Boolean(saved);
+              if (saved) this.state = this.normalizeState(saved, true);
             } catch (error) {
               toast(
                 "保存領域を利用できません。JSONバックアップを使ってください。",
@@ -819,6 +1187,9 @@
             }
             this.bind();
             this.renderAll();
+            if (!this.hasSavedDoc && !this.state.ui.firstRunGuideDismissed) {
+              setTimeout(() => this.openGuide(), 0);
+            }
             setInterval(() => this.updateClocks(), 500);
             window.addEventListener("resize", () => {
               this.fit();
@@ -840,6 +1211,7 @@
             $("#importBtn").onclick = () => $("#importFile").click();
             $("#importFile").onchange = (event) => this.importJson(event);
             $("#playBtn").onclick = () => this.startView();
+            $("#helpBtn").onclick = () => this.openHelp();
             $("#addText").onclick = () => this.add("text");
             $("#addImage").onclick = () => this.add("image");
             $("#addVideo").onclick = () => this.add("video");
@@ -887,8 +1259,16 @@
               this.switchScene(this.state.lastScene - 1);
             $("#nextScene").onclick = () =>
               this.switchScene(this.state.lastScene + 1);
-            $("#toggleScenes").onclick = () =>
-              $("#app").classList.toggle("collapsed");
+            $("#toggleScenes").onclick = () => this.setScenesCollapsed(true);
+            $("#openScenes").onclick = () => this.setScenesCollapsed(false);
+            for (const button of document.querySelectorAll("[data-close-modal]")) {
+              button.onclick = () => this.closeModal();
+            }
+            $("#guideStartBtn").onclick = () => this.closeGuide();
+            $("#guideHelpBtn").onclick = () => {
+              this.closeGuide();
+              this.openHelp();
+            };
             $("#canvas").onpointerdown = (event) => this.startRange(event);
             $("#viewer").onmousemove = () => this.bumpCursor();
             document.addEventListener("keydown", (event) => this.keys(event));
@@ -999,18 +1379,22 @@
               files: [],
             };
           }
-          normalizeState(raw) {
+          normalizeState(raw, existingDoc = false) {
             const state = this.fresh();
             if (!raw || typeof raw !== "object") return state;
+            const rawUi = raw.ui && typeof raw.ui === "object" ? raw.ui : {};
             state.ui = {
-              grid: Boolean(raw.ui && raw.ui.grid),
-              guides: Boolean(raw.ui && raw.ui.guides),
-              snap: Boolean(raw.ui && raw.ui.snap),
-              sceneMode: ["none", "sequence", "random"].includes(
-                raw.ui && raw.ui.sceneMode,
-              )
-                ? raw.ui.sceneMode
+              grid: Boolean(rawUi.grid),
+              guides: Boolean(rawUi.guides),
+              snap: Boolean(rawUi.snap),
+              sceneMode: ["none", "sequence", "random"].includes(rawUi.sceneMode)
+                ? rawUi.sceneMode
                 : "none",
+              scenesCollapsed: Boolean(rawUi.scenesCollapsed),
+              firstRunGuideDismissed:
+                "firstRunGuideDismissed" in rawUi
+                  ? Boolean(rawUi.firstRunGuideDismissed)
+                  : existingDoc,
             };
             const scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
             state.scenes = scenes
@@ -1254,6 +1638,7 @@
             this.renderSceneSettings();
             this.renderCanvas();
             this.renderProps();
+            this.applyScenePanelState();
             this.fit();
             this.sync();
             this.commands();
@@ -1263,6 +1648,49 @@
             $("#guideChk").checked = this.state.ui.guides;
             $("#snapChk").checked = this.state.ui.snap;
             $("#sceneMode").value = this.state.ui.sceneMode;
+          }
+          applyScenePanelState() {
+            $("#app").classList.toggle(
+              "collapsed",
+              this.state.ui.scenesCollapsed,
+            );
+          }
+          setScenesCollapsed(collapsed) {
+            this.state.ui.scenesCollapsed = Boolean(collapsed);
+            this.applyScenePanelState();
+            this.fit();
+            this.dirty();
+          }
+          openHelp() {
+            if (this.viewing) return;
+            this.openModal("helpModal", "[data-close-modal]");
+          }
+          openGuide() {
+            if (this.viewing) return;
+            this.openModal("guideModal", "#guideStartBtn");
+          }
+          openModal(id, focusSelector) {
+            this.activeModal = $("#" + id);
+            this.modalReturnFocus = document.activeElement;
+            this.activeModal.classList.add("open");
+            const focusTarget = this.activeModal.querySelector(focusSelector);
+            if (focusTarget) focusTarget.focus();
+          }
+          closeGuide() {
+            if ($("#dismissGuideChk").checked) {
+              this.state.ui.firstRunGuideDismissed = true;
+              this.dirty();
+            }
+            this.closeModal();
+          }
+          closeModal() {
+            if (!this.activeModal) return false;
+            this.activeModal.classList.remove("open");
+            this.activeModal = null;
+            const target = this.modalReturnFocus || $("#helpBtn");
+            this.modalReturnFocus = null;
+            if (target && typeof target.focus === "function") target.focus();
+            return true;
           }
           renderScenes() {
             const list = $("#sceneList");
@@ -1667,375 +2095,39 @@
               panel.textContent = "オブジェクトを選択してください。";
               return;
             }
-            for (const [section, label, path, type] of [
-              ["位置とサイズ", "名前", "name", "text"],
-              ["位置とサイズ", "X", "x", "number"],
-              ["位置とサイズ", "Y", "y", "number"],
-              ["位置とサイズ", "幅", "w", "number"],
-              ["位置とサイズ", "高さ", "h", "number"],
-              ["位置とサイズ", "回転", "rot", "number"],
-              ["位置とサイズ", "透明度", "opacity", "number"],
-              ["表示", "ロック", "locked", "checkbox"],
-              ["表示", "表示", "visible", "checkbox"],
-            ])
-              this.field(panel, section, label, path, type, objects);
+            this.renderFields(panel, BASE_PROPERTY_FIELDS, objects);
             if (objects.length > 1) return;
+
             const object = objects[0];
-            if (object.type === "text") {
-              this.field(panel, "文字", "内容", "text", "textarea", objects);
-              this.field(
-                panel,
-                "文字",
-                "サイズ",
-                "style.fontSize",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "太字",
-                "style.bold",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "文字色",
-                "style.color",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "横揃え",
-                "style.align",
-                "select",
-                objects,
-                [
-                  ["left", "左"],
-                  ["center", "中央"],
-                  ["right", "右"],
-                ],
-              );
-              this.field(
-                panel,
-                "文字",
-                "縦揃え",
-                "style.valign",
-                "select",
-                objects,
-                [
-                  ["top", "上"],
-                  ["center", "中央"],
-                  ["bottom", "下"],
-                ],
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "背景色",
-                "style.bgColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "背景透明度",
-                "style.bgAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "余白",
-                "style.pad",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "枠線",
-                "style.border",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "枠線色",
-                "style.borderColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "角丸",
-                "style.radius",
-                "number",
-                objects,
-              );
-            }
-            if (object.type === "clock") {
-              this.field(panel, "文字", "形式", "format", "select", objects, [
-                ["HH:mm", "HH:mm"],
-                ["HH:mm:ss", "HH:mm:ss"],
-                ["yyyy年M月d日", "yyyy年M月d日"],
-                ["yyyy年M月d日（曜）", "yyyy年M月d日（曜）"],
-                ["datetime", "日付＋時刻"],
-              ]);
-              this.field(
-                panel,
-                "文字",
-                "サイズ",
-                "style.fontSize",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "文字色",
-                "style.color",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "背景色",
-                "style.bgColor",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "背景透明度",
-                "style.bgAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "文字",
-                "配置",
-                "style.align",
-                "select",
-                objects,
-                [
-                  ["left", "左"],
-                  ["center", "中央"],
-                  ["right", "右"],
-                ],
-              );
-            }
             if (object.type === "image" || object.type === "video") {
-              const b = document.createElement("button");
-              b.textContent = "ファイルを選択";
-              b.onclick = () => this.pickFile(object);
-              panel.append(b);
-              this.field(
-                panel,
-                "メディア",
-                "ファイル名",
-                "fileName",
-                "readonly",
-                objects,
-              );
-              this.field(
-                panel,
-                "メディア",
-                "表示方法",
-                "fit",
-                "select",
-                objects,
-                [
-                  ["contain", "全体を表示"],
-                  ["cover", "領域を埋める"],
-                  ["fill", "引き伸ばす"],
-                ],
-              );
-              this.field(
-                panel,
-                "メディア",
-                "縦横比維持",
-                "keepRatio",
-                "checkbox",
-                objects,
-              );
-              if (object.type === "video") {
-                this.field(
-                  panel,
-                  "再生",
-                  "繰り返し",
-                  "loop",
-                  "checkbox",
-                  objects,
-                );
-                this.field(
-                  panel,
-                  "再生",
-                  "ミュート",
-                  "muted",
-                  "checkbox",
-                  objects,
-                );
-                this.field(
-                  panel,
-                  "再生",
-                  "コントロール",
-                  "controls",
-                  "checkbox",
-                  objects,
-                );
-              }
+              this.button(panel, "ファイルを選択", () => this.pickFile(object));
             }
             if (object.type === "player") {
-              const b = document.createElement("button");
-              b.textContent = "フォルダを選択";
-              b.onclick = () => this.pickFolder(object);
-              panel.append(b);
-              for (const f of [
-                ["メディア", "フォルダ名", "folderName", "readonly"],
-                ["メディア", "画像数", "imageCount", "readonly"],
-                ["メディア", "動画数", "videoCount", "readonly"],
-                ["メディア", "合計件数", "totalCount", "readonly"],
-                ["メディア", "最終更新", "lastRefreshAt", "readonly"],
-                ["メディア", "状態", "lastRefreshStatus", "readonly"],
-              ])
-                this.field(panel, ...f, objects);
-              this.field(panel, "再生", "順番", "order", "select", objects, [
-                ["name", "ファイル名順"],
-                ["random", "ランダム"],
-              ]);
-              this.field(
-                panel,
-                "再生",
-                "繰り返し",
-                "repeat",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "再生",
-                "画像秒数",
-                "imageSeconds",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "再生",
-                "動画ミュート",
-                "muted",
-                "checkbox",
-                objects,
-              );
-              this.field(panel, "再生", "表示方法", "fit", "select", objects, [
-                ["contain", "全体"],
-                ["cover", "埋める"],
-                ["fill", "引き伸ばす"],
-              ]);
-              this.field(
-                panel,
-                "詳細",
-                "サブフォルダ",
-                "subfolders",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "詳細",
-                "自動更新",
-                "autoRefresh",
-                "checkbox",
-                objects,
-              );
-              this.field(
-                panel,
-                "詳細",
-                "更新分",
-                "refreshMinutes",
-                "number",
-                objects,
-              );
-              const r = document.createElement("button");
-              r.textContent = "手動更新";
-              r.onclick = () => this.refreshFolder(object);
-              panel.append(r);
-            }
-            if (object.type === "shape") {
-              this.field(
-                panel,
-                "背景と枠線",
-                "形",
-                "shape",
-                "select",
-                objects,
-                [
-                  ["rect", "長方形"],
-                  ["round", "角丸長方形"],
-                  ["line", "直線"],
-                ],
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "塗り",
-                "style.fill",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "塗り透明度",
-                "style.fillAlpha",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "線色",
-                "style.stroke",
-                "color",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "線幅",
-                "style.strokeWidth",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "角丸",
-                "style.radius",
-                "number",
-                objects,
-              );
-              this.field(
-                panel,
-                "背景と枠線",
-                "直線太さ",
-                "style.lineWidth",
-                "number",
-                objects,
+              this.button(panel, "フォルダを選択", () =>
+                this.pickFolder(object),
               );
             }
+            this.renderFields(
+              panel,
+              PROPERTY_FIELDS_BY_TYPE[object.type] || [],
+              objects,
+            );
+            if (object.type === "player") {
+              this.button(panel, "手動更新", () =>
+                this.refreshFolder(object),
+              );
+            }
+          }
+          renderFields(panel, fields, objects) {
+            for (const [section, label, path, type, options = []] of fields) {
+              this.field(panel, section, label, path, type, objects, options);
+            }
+          }
+          button(panel, text, onclick) {
+            const button = document.createElement("button");
+            button.textContent = text;
+            button.onclick = onclick;
+            panel.append(button);
           }
           field(panel, sectionName, label, path, type, objects, options = []) {
             let section = panel.querySelector(
@@ -2260,19 +2352,28 @@
             }
           }
           keys(event) {
+            if (event.key === "Escape") {
+              if (this.activeModal) {
+                event.preventDefault();
+                if (this.activeModal.id === "guideModal") this.closeGuide();
+                else this.closeModal();
+                return;
+              }
+              if (this.viewing) {
+                this.stopView();
+                return;
+              }
+              this.sel = [];
+              this.renderAll();
+              return;
+            }
+            if (this.activeModal) return;
             if (
               ["INPUT", "TEXTAREA", "SELECT"].includes(
                 document.activeElement.tagName,
               )
             )
               return;
-            if (event.key === "Escape") {
-              if (this.viewing) this.stopView();
-              else {
-                this.sel = [];
-                this.renderAll();
-              }
-            }
             if (event.key === "Delete" && this.sel.length)
               this.deleteSelection();
             if (event.ctrlKey && event.key.toLowerCase() === "c") {
@@ -2731,7 +2832,7 @@
               if (!this.isBackupShape(parsed)) {
                 throw new Error("not isignage backup");
               }
-              const normalized = this.normalizeState(copy(parsed));
+              const normalized = this.normalizeState(copy(parsed), true);
               if (!normalized.scenes.length) {
                 throw new Error("invalid scenes");
               }
