@@ -580,6 +580,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="helpTitle"
+      tabindex="-1"
     >
       <div class="modal-card">
         <div class="modal-header">
@@ -682,6 +683,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="guideTitle"
+      tabindex="-1"
     >
       <div class="modal-card">
         <div class="modal-header"><h2 id="guideTitle">iSignageへようこそ</h2></div>
@@ -1266,8 +1268,13 @@
             }
             $("#guideStartBtn").onclick = () => this.closeGuide();
             $("#guideHelpBtn").onclick = () => {
-              this.closeGuide();
-              this.openHelp();
+              this.persistGuideDismissal();
+              this.switchModal(
+                "guideModal",
+                "helpModal",
+                "[data-close-modal]",
+                $("#helpBtn"),
+              );
             };
             $("#canvas").onpointerdown = (event) => this.startRange(event);
             $("#viewer").onmousemove = () => this.bumpCursor();
@@ -1661,36 +1668,119 @@
             this.fit();
             this.dirty();
           }
-          openHelp() {
+          openHelp(returnFocusTarget = document.activeElement) {
             if (this.viewing) return;
-            this.openModal("helpModal", "[data-close-modal]");
+            this.openModal("helpModal", "[data-close-modal]", returnFocusTarget);
           }
           openGuide() {
             if (this.viewing) return;
             this.openModal("guideModal", "#guideStartBtn");
           }
-          openModal(id, focusSelector) {
-            this.activeModal = $("#" + id);
-            this.modalReturnFocus = document.activeElement;
+          openModal(
+            id,
+            focusSelector,
+            returnFocusTarget = document.activeElement,
+          ) {
+            const modal = $("#" + id);
+            if (!modal) return;
+            $("#app").inert = true;
+            this.activeModal = modal;
+            this.modalReturnFocus = returnFocusTarget;
             this.activeModal.classList.add("open");
             const focusTarget = this.activeModal.querySelector(focusSelector);
             if (focusTarget) focusTarget.focus();
+            else this.activeModal.focus();
           }
-          closeGuide() {
+          switchModal(fromId, toId, focusSelector, returnFocusTarget) {
+            const fromModal = $("#" + fromId);
+            const toModal = $("#" + toId);
+            if (!toModal) return;
+            $("#app").inert = true;
+            if (fromModal) fromModal.classList.remove("open");
+            toModal.classList.add("open");
+            this.activeModal = toModal;
+            this.modalReturnFocus = returnFocusTarget;
+            const focusTarget = toModal.querySelector(focusSelector);
+            if (focusTarget) focusTarget.focus();
+            else toModal.focus();
+          }
+          persistGuideDismissal() {
             if ($("#dismissGuideChk").checked) {
               this.state.ui.firstRunGuideDismissed = true;
               this.dirty();
             }
-            this.closeModal();
           }
-          closeModal() {
-            if (!this.activeModal) return false;
+          closeGuide(options = {}) {
+            this.persistGuideDismissal();
+            this.closeModal(options);
+          }
+          closeModal({ restoreFocus = true } = {}) {
+            if (!this.activeModal) {
+              $("#app").inert = false;
+              return false;
+            }
             this.activeModal.classList.remove("open");
             this.activeModal = null;
-            const target = this.modalReturnFocus || $("#helpBtn");
+            $("#app").inert = false;
+            const target = this.resolveFocusTarget(this.modalReturnFocus);
             this.modalReturnFocus = null;
-            if (target && typeof target.focus === "function") target.focus();
+            if (restoreFocus) target.focus();
             return true;
+          }
+          resolveFocusTarget(preferred) {
+            for (const target of [
+              preferred,
+              $("#helpBtn"),
+              $("#playBtn"),
+              document.body,
+            ]) {
+              if (this.canRestoreFocus(target)) return target;
+            }
+            return document.body;
+          }
+          canRestoreFocus(element) {
+            return Boolean(
+              element &&
+                element.isConnected &&
+                !element.disabled &&
+                typeof element.focus === "function" &&
+                (element === document.body || element.offsetParent !== null) &&
+                !element.closest("[inert]"),
+            );
+          }
+          getFocusableElements(modal) {
+            return [
+              ...modal.querySelectorAll(
+                'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
+              ),
+            ].filter((element) => element.offsetParent !== null);
+          }
+          trapModalFocus(event) {
+            if (!this.activeModal || event.key !== "Tab") return false;
+            const focusable = this.getFocusableElements(this.activeModal);
+            if (!focusable.length) {
+              event.preventDefault();
+              this.activeModal.focus();
+              return true;
+            }
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (focusable.length === 1) {
+              event.preventDefault();
+              first.focus();
+              return true;
+            }
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+              return true;
+            }
+            if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+              return true;
+            }
+            return false;
           }
           renderScenes() {
             const list = $("#sceneList");
@@ -2352,13 +2442,20 @@
             }
           }
           keys(event) {
-            if (event.key === "Escape") {
-              if (this.activeModal) {
+            if (this.activeModal) {
+              if (event.key === "Escape") {
                 event.preventDefault();
                 if (this.activeModal.id === "guideModal") this.closeGuide();
                 else this.closeModal();
                 return;
               }
+              if (event.key === "Tab") {
+                this.trapModalFocus(event);
+                return;
+              }
+              return;
+            }
+            if (event.key === "Escape") {
               if (this.viewing) {
                 this.stopView();
                 return;
@@ -2367,7 +2464,6 @@
               this.renderAll();
               return;
             }
-            if (this.activeModal) return;
             if (
               ["INPUT", "TEXTAREA", "SELECT"].includes(
                 document.activeElement.tagName,
