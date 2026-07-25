@@ -15,6 +15,10 @@ File System Access API を利用するため、Firefox や Safari ではフォ�
 2. Edge または Chrome で直接開きます。
 3. Web サーバー、npm、外部ライブラリ、CDN は不要です。
 
+## GitHub Pages
+
+`main` ブランチの `isignage.html` を更新すると、GitHub Actions が同ファイルを `index.html` として GitHub Pages へ公開します。Actions の手動実行にも対応しています。リポジトリで Pages が未有効の場合は、`PAGES_TOKEN` シークレットへ Pages を有効化できる Personal Access Token を設定してください。
+
 ## 基本操作
 
 - 上部の「テキスト」「画像」「動画」「メディア」「図形」「時計」から追加します。
