@@ -557,7 +557,7 @@
           <div class="canvas-wrap" id="canvasWrap">
             <div id="canvas" class="canvas"></div>
             <div id="empty" class="empty-message">
-              上の「挿入」から、テキストやメディアを追加してください。
+              上部のボタンから、テキストやメディアを追加してください。
             </div>
           </div>
         </main>
@@ -602,7 +602,7 @@
             <ul>
               <li>上部のボタンから追加し、クリックで選択、ドラッグで移動します。</li>
               <li>選択枠のハンドルでサイズを変え、右側のプロパティ欄で数値や表示を変更できます。</li>
-              <li>複数選択、整列、ロックに対応しています。ロックしたオブジェクトは移動・削除できません。</li>
+              <li>複数選択、整列、ロックに対応しています。ロックしたオブジェクトは選択できますが、移動・削除はできません。</li>
             </ul>
           </section>
           <section>
@@ -628,7 +628,8 @@
             <ul>
               <li>「表示開始」で編集UIを隠し、全画面表示を要求します。</li>
               <li>全画面表示に失敗しても通常表示で継続します。</li>
-              <li>Escで編集画面へ戻ります。マウスポインターは一定時間後に隠れます。</li>
+              <li>Escで編集画面へ戻ります。表示中はEsc以外の編集ショートカットを受け付けません。</li>
+              <li>マウスポインターは一定時間後に隠れます。</li>
               <li>動画は既定でミュートです。</li>
             </ul>
           </section>
@@ -851,6 +852,7 @@
             this.refreshTimer = null;
             this.media = null;
             this.stopped = false;
+            this.idle = true;
             this.urlKey = `view:${sceneId}:${object.id}:player`;
           }
           async start() {
@@ -892,6 +894,10 @@
                 this.failed.clear();
                 this.lastRandom = -1;
                 this.index = Math.min(this.index, this.files.length - 1);
+                if (this.idle && this.files.length) {
+                  this.index = -1;
+                  this.next();
+                }
               },
               minutes * 60 * 1000,
             );
@@ -937,6 +943,7 @@
           show(file, index) {
             this.detach();
             this.container.textContent = "";
+            this.idle = false;
             const url = this.app.urls.create(this.urlKey, file);
             const isVideo = VID.test(file.name);
             const media = document.createElement(isVideo ? "video" : "img");
@@ -950,13 +957,14 @@
             if (isVideo) {
               media.autoplay = true;
               media.muted = Boolean(this.object.muted);
-              media.onended = () => {
-                this.failed.clear();
-                this.next();
-              };
+              // 実際に読み込めたときだけ失敗記録を消す。
+              // 表示開始時に消すと、全ファイルが壊れていても
+              // 失敗件数が溜まらず再生不能の案内へ到達できない。
+              media.onloadeddata = () => this.failed.clear();
+              media.onended = () => this.next();
               media.play().catch(() => this.fail(index));
             } else {
-              this.failed.clear();
+              media.onload = () => this.failed.clear();
               this.switchTimer = setTimeout(
                 () => this.next(),
                 this.object.imageSeconds * 1000,
@@ -980,8 +988,10 @@
             clearTimeout(this.switchTimer);
             if (this.media) {
               this.media.onerror = null;
+              this.media.onload = null;
               if (this.media.tagName === "VIDEO") {
                 this.media.onended = null;
+                this.media.onloadeddata = null;
                 this.media.pause();
                 this.media.removeAttribute("src");
                 this.media.load();
@@ -991,6 +1001,7 @@
           }
           fallback(message) {
             this.detach();
+            this.idle = true;
             this.app.urls.revoke(this.urlKey);
             this.container.textContent = "";
             const div = document.createElement("div");
@@ -1026,6 +1037,86 @@
           ["cover", "埋める"],
           ["fill", "引き伸ばす"],
         ];
+        const TYPE_LABELS = {
+          text: "テキスト",
+          image: "画像",
+          video: "動画",
+          player: "メディア",
+          clock: "時計",
+          shape: "図形",
+        };
+        const TYPE_DEFAULTS = {
+          text: {
+            text: "テキストを入力",
+            style: {
+              fontSize: 72,
+              bold: false,
+              color: "#111827",
+              bgColor: "#ffffff",
+              bgAlpha: 0,
+              align: "center",
+              valign: "center",
+              pad: 20,
+              border: false,
+              borderColor: "#111827",
+              radius: 0,
+            },
+          },
+          clock: {
+            format: "HH:mm",
+            style: {
+              fontSize: 88,
+              color: "#111827",
+              bgColor: "#ffffff",
+              bgAlpha: 0,
+              align: "center",
+            },
+          },
+          shape: {
+            shape: "rect",
+            style: {
+              fill: "#60a5fa",
+              fillAlpha: 1,
+              stroke: "#1d4ed8",
+              strokeWidth: 4,
+              radius: 0,
+              lineWidth: 8,
+            },
+          },
+          image: {
+            fit: "contain",
+            fileName: "未選択",
+            file: null,
+            keepRatio: true,
+          },
+          video: {
+            fit: "contain",
+            fileName: "未選択",
+            file: null,
+            autoplay: true,
+            loop: true,
+            muted: true,
+            controls: false,
+            keepRatio: true,
+          },
+          player: {
+            fit: "contain",
+            folderId: null,
+            folderName: "未選択",
+            imageCount: 0,
+            videoCount: 0,
+            totalCount: 0,
+            lastRefreshAt: "",
+            lastRefreshStatus: "未更新",
+            order: "name",
+            repeat: true,
+            imageSeconds: 5,
+            muted: true,
+            subfolders: false,
+            autoRefresh: false,
+            refreshMinutes: 5,
+          },
+        };
         const PROPERTY_FIELDS_BY_TYPE = {
           text: [
             ["文字", "内容", "text", "textarea"],
@@ -1142,6 +1233,7 @@
             this.scale = 1;
             this.drag = null;
             this.range = null;
+            this.propsFrame = 0;
             this.sessions = [];
             this.viewing = false;
             this.stopping = false;
@@ -1281,17 +1373,11 @@
             document.addEventListener("keydown", (event) => this.keys(event));
           }
           make(type) {
-            const base = {
+            if (!TYPES.has(type)) return null;
+            return {
               id: uid(),
               type,
-              name: {
-                text: "テキスト",
-                image: "画像",
-                video: "動画",
-                player: "メディア",
-                clock: "時計",
-                shape: "図形",
-              }[type],
+              name: TYPE_LABELS[type],
               x: 220,
               y: 160,
               w: 480,
@@ -1302,88 +1388,7 @@
               visible: true,
               z: Date.now(),
               style: {},
-            };
-            if (type === "text")
-              return {
-                ...base,
-                text: "テキストを入力",
-                style: {
-                  fontSize: 72,
-                  bold: false,
-                  color: "#111827",
-                  bgColor: "#ffffff",
-                  bgAlpha: 0,
-                  align: "center",
-                  valign: "center",
-                  pad: 20,
-                  border: false,
-                  borderColor: "#111827",
-                  radius: 0,
-                },
-              };
-            if (type === "clock")
-              return {
-                ...base,
-                format: "HH:mm",
-                style: {
-                  fontSize: 88,
-                  color: "#111827",
-                  bgColor: "#ffffff",
-                  bgAlpha: 0,
-                  align: "center",
-                },
-              };
-            if (type === "shape")
-              return {
-                ...base,
-                shape: "rect",
-                style: {
-                  fill: "#60a5fa",
-                  fillAlpha: 1,
-                  stroke: "#1d4ed8",
-                  strokeWidth: 4,
-                  radius: 0,
-                  lineWidth: 8,
-                },
-              };
-            if (type === "image")
-              return {
-                ...base,
-                fit: "contain",
-                fileName: "未選択",
-                file: null,
-                keepRatio: true,
-              };
-            if (type === "video")
-              return {
-                ...base,
-                fit: "contain",
-                fileName: "未選択",
-                file: null,
-                autoplay: true,
-                loop: true,
-                muted: true,
-                controls: false,
-                keepRatio: true,
-              };
-            return {
-              ...base,
-              fit: "contain",
-              folderId: null,
-              folderName: "未選択",
-              imageCount: 0,
-              videoCount: 0,
-              totalCount: 0,
-              lastRefreshAt: "",
-              lastRefreshStatus: "未更新",
-              order: "name",
-              repeat: true,
-              imageSeconds: 5,
-              muted: true,
-              subfolders: false,
-              autoRefresh: false,
-              refreshMinutes: 5,
-              files: [],
+              ...copy(TYPE_DEFAULTS[type]),
             };
           }
           normalizeState(raw, existingDoc = false) {
@@ -1467,6 +1472,7 @@
             )
               return null;
             const object = this.make(source.type);
+            if (!object) return null;
             Object.assign(object, {
               id: typeof source.id === "string" ? source.id : uid(),
               name:
@@ -1631,8 +1637,9 @@
             }
           }
           add(type) {
-            this.push();
             const object = this.make(type);
+            if (!object) return;
+            this.push();
             this.current.objects.push(object);
             this.sel = [object.id];
             this.renderAll();
@@ -1849,18 +1856,23 @@
             if (!view && this.state.ui.grid) target.classList.add("grid");
             if (!view && this.state.ui.guides) target.classList.add("guides");
             target.style.background = this.current.bg;
-            for (const object of [...this.current.objects].sort(
-              (a, b) => a.z - b.z,
-            )) {
-              if (object.visible) target.append(this.element(object, view));
+            const ordered = [...this.current.objects].sort((a, b) => a.z - b.z);
+            let layer = 0;
+            for (const object of ordered) {
+              if (!object.visible) continue;
+              layer += 1;
+              target.append(this.element(object, view, layer));
             }
             $("#empty").style.display =
               !view && this.current.objects.length === 0 ? "block" : "none";
           }
-          element(object, view) {
+          element(object, view, layer) {
             const shell = document.createElement("div");
             shell.className = `object-shell ${this.sel.includes(object.id) && !view ? "selected" : ""} ${object.locked ? "locked" : ""}`;
             shell.dataset.id = object.id;
+            // object.z は並び順の基準にだけ使う。CSS の z-index は
+            // 32bit へ丸められるため、描画順は 1 からの連番で指定する。
+            shell.style.zIndex = String(layer);
             this.applyGeom(shell, object);
             const content = document.createElement("div");
             content.className = "object-content";
@@ -1881,7 +1893,6 @@
               height: `${object.h}px`,
               opacity: object.opacity,
               transform: `rotate(${object.rot}deg)`,
-              zIndex: object.z,
             });
           }
           content(box, object, view) {
@@ -1925,7 +1936,8 @@
           clock(box, object) {
             const div = document.createElement("div");
             div.className = "text-object clock-text";
-            div.textContent = this.clockText(object);
+            div.dataset.format = object.format;
+            div.textContent = this.clockText(object.format);
             Object.assign(div.style, {
               fontSize: `${object.style.fontSize}px`,
               color: object.style.color,
@@ -2013,7 +2025,7 @@
             div.textContent = message;
             box.append(div);
           }
-          handles(shell) {
+          handles(shell, object) {
             for (const pos of ["nw", "n", "ne", "e", "se", "s", "sw", "w"]) {
               const handle = document.createElement("i");
               handle.className = `handle h-${pos}`;
@@ -2022,30 +2034,41 @@
               handle.style.left = `calc(${x}% - 7px)`;
               handle.style.top = `calc(${y}% - 7px)`;
               handle.onpointerdown = (event) =>
-                this.startDrag(
-                  event,
-                  this.current.objects.find((o) => o.id === shell.dataset.id),
-                  pos,
-                );
+                this.startDrag(event, object, pos);
               shell.append(handle);
             }
           }
           startDrag(event, object, handle = null) {
             event.stopPropagation();
-            if (!object || object.locked) return;
+            if (!object) return;
             if (event.ctrlKey)
               this.sel = this.sel.includes(object.id)
                 ? this.sel.filter((id) => id !== object.id)
                 : [...this.sel, object.id];
             else if (!this.sel.includes(object.id)) this.sel = [object.id];
             this.renderAll();
-            this.push();
+            // ロック中も選択はできる。移動とサイズ変更だけを行わない。
+            if (object.locked) return;
+            const ids = this.sel.filter((id) => {
+              const target = this.current.objects.find(
+                (item) => item.id === id,
+              );
+              return target && !target.locked;
+            });
             this.drag = {
               sx: event.clientX,
               sy: event.clientY,
-              ids: [...this.sel],
-              start: copy(this.current.objects),
+              ids,
+              start: new Map(
+                this.current.objects
+                  .filter((item) => ids.includes(item.id))
+                  .map((item) => [
+                    item.id,
+                    { x: item.x, y: item.y, w: item.w, h: item.h },
+                  ]),
+              ),
               handle,
+              moved: false,
             };
             document.onpointermove = (moveEvent) => this.move(moveEvent);
             document.onpointerup = () => this.endDrag();
@@ -2054,11 +2077,17 @@
             if (!this.drag) return;
             const dx = (event.clientX - this.drag.sx) / this.scale;
             const dy = (event.clientY - this.drag.sy) / this.scale;
+            if (!this.drag.moved) {
+              // 単なる選択クリックでUndo履歴と未保存状態を汚さない。
+              if (dx === 0 && dy === 0) return;
+              this.drag.moved = true;
+              this.push();
+            }
             for (const id of this.drag.ids) {
               const object = this.current.objects.find(
                 (item) => item.id === id,
               );
-              const start = this.drag.start.find((item) => item.id === id);
+              const start = this.drag.start.get(id);
               if (!object || !start || object.locked) continue;
               this.applyDelta(object, start, dx, dy, event.shiftKey);
               const el = document.querySelector(
@@ -2066,7 +2095,7 @@
               );
               if (el) this.applyGeom(el, object);
             }
-            this.renderProps();
+            this.schedulePropsUpdate();
           }
           applyDelta(object, start, dx, dy, shiftKey) {
             const handle = this.drag.handle;
@@ -2117,7 +2146,10 @@
           endDrag() {
             document.onpointermove = null;
             document.onpointerup = null;
+            const moved = Boolean(this.drag && this.drag.moved);
             this.drag = null;
+            this.cancelPropsUpdate();
+            if (!moved) return;
             this.renderAll();
             this.dirty();
           }
@@ -2128,6 +2160,7 @@
               sx: (event.clientX - rect.left) / this.scale,
               sy: (event.clientY - rect.top) / this.scale,
               base: event.ctrlKey ? [...this.sel] : [],
+              moved: false,
             };
             const box = document.createElement("div");
             box.id = "selectionBox";
@@ -2138,6 +2171,7 @@
           }
           rangeMove(event) {
             if (!this.range) return;
+            this.range.moved = true;
             const rect = $("#canvas").getBoundingClientRect();
             const x2 = (event.clientX - rect.left) / this.scale;
             const y2 = (event.clientY - rect.top) / this.scale;
@@ -2164,16 +2198,33 @@
               if (hit) selected.add(object.id);
             }
             this.sel = [...selected];
-            this.renderProps();
-            this.commands();
+            this.schedulePropsUpdate();
           }
           rangeEnd() {
             document.onpointermove = null;
             document.onpointerup = null;
             const box = $("#selectionBox");
             if (box) box.remove();
+            // 空白を範囲選択せずにクリックした場合は選択解除にする。
+            if (this.range && !this.range.moved)
+              this.sel = [...this.range.base];
             this.range = null;
+            this.cancelPropsUpdate();
             this.renderAll();
+          }
+          schedulePropsUpdate() {
+            // ポインター移動ごとの再構築は重いので1フレームにまとめる。
+            if (this.propsFrame) return;
+            this.propsFrame = requestAnimationFrame(() => {
+              this.propsFrame = 0;
+              this.renderProps();
+              this.commands();
+            });
+          }
+          cancelPropsUpdate() {
+            if (!this.propsFrame) return;
+            cancelAnimationFrame(this.propsFrame);
+            this.propsFrame = 0;
           }
           renderProps() {
             const panel = $("#props");
@@ -2353,17 +2404,9 @@
             }
           }
           async refreshFolder(object) {
-            const files = await this.scanPlayer(object, true);
-            if (files === null) {
-              this.renderAll();
-              this.dirty();
-              return;
-            }
-            object.files = files.map((file) => ({
-              name: file.name,
-              relativePath: file.relativePath || file.name,
-              type: IMG.test(file.name) ? "image" : "video",
-            }));
+            // 件数と状態は scanPlayer が object 側へ書き込む。
+            // ファイル一覧は表示時に再走査するため保持しない。
+            await this.scanPlayer(object, true);
             this.renderAll();
             this.dirty();
           }
@@ -2464,6 +2507,8 @@
               this.renderAll();
               return;
             }
+            // 表示モード中は編集ショートカットを受け付けない。
+            if (this.viewing) return;
             if (
               ["INPUT", "TEXTAREA", "SELECT"].includes(
                 document.activeElement.tagName,
@@ -2713,8 +2758,11 @@
             this.dirty();
           }
           async startView() {
+            if (this.viewing || this.stopping) return;
             await this.save(true);
             this.viewing = true;
+            // シーン自動切替で進んだ位置を編集側へ持ち込まない。
+            this.editScene = this.state.lastScene;
             $("#viewer").style.display = "flex";
             this.renderViewScene();
             this.fitView();
@@ -2783,6 +2831,12 @@
             this.stopping = true;
             this.viewing = false;
             this.stopViewScene();
+            if (
+              Number.isInteger(this.editScene) &&
+              this.editScene < this.state.scenes.length
+            )
+              this.state.lastScene = this.editScene;
+            this.editScene = null;
             clearTimeout(this.cursorTimer);
             $("#viewer").classList.remove("hide-cursor");
             $("#viewer").style.display = "none";
@@ -2811,10 +2865,13 @@
           }
           fit() {
             const workspace = $("#workspace");
-            this.scale = Math.min(
-              (workspace.clientWidth - 40) / W,
-              (workspace.clientHeight - 40) / H,
-              1,
+            this.scale = Math.max(
+              0.05,
+              Math.min(
+                (workspace.clientWidth - 40) / W,
+                (workspace.clientHeight - 40) / H,
+                1,
+              ),
             );
             $("#canvas").style.transform = `scale(${this.scale})`;
             $("#canvasWrap").style.width = `${W * this.scale}px`;
@@ -2827,27 +2884,23 @@
             $("#viewCanvas").style.transform =
               `scale(${Math.min(innerWidth / W, innerHeight / H)})`;
           }
-          clockText(object) {
+          clockText(format) {
             const d = new Date();
             const wd = "日月火水木金土"[d.getDay()];
             const p = (n) => String(n).padStart(2, "0");
-            if (object.format === "HH:mm")
+            if (format === "HH:mm")
               return `${p(d.getHours())}:${p(d.getMinutes())}`;
-            if (object.format === "HH:mm:ss")
+            if (format === "HH:mm:ss")
               return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-            if (object.format === "yyyy年M月d日")
+            if (format === "yyyy年M月d日")
               return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-            if (object.format === "yyyy年M月d日（曜）")
+            if (format === "yyyy年M月d日（曜）")
               return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${wd}）`;
             return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日（${wd}） ${p(d.getHours())}:${p(d.getMinutes())}`;
           }
           updateClocks() {
-            for (const el of document.querySelectorAll(".object-shell")) {
-              const object = this.current.objects.find(
-                (item) => item.id === el.dataset.id,
-              );
-              const clock = el.querySelector(".clock-text");
-              if (object && clock) clock.textContent = this.clockText(object);
+            for (const el of document.querySelectorAll(".clock-text")) {
+              el.textContent = this.clockText(el.dataset.format);
             }
           }
           folderIdInUse(folderId, exceptObjectId = null) {
@@ -2916,7 +2969,8 @@
             anchor.href = url;
             anchor.download = "isignage-backup.json";
             anchor.click();
-            URL.revokeObjectURL(url);
+            // 直後に破棄すると保存が始まる前に失敗する場合があるため遅延する。
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
           }
           async importJson(event) {
             const file = event.target.files && event.target.files[0];
