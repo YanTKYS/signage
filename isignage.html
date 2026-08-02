@@ -1292,6 +1292,10 @@
             this.viewing = false;
             this.startingView = false;
             this.stopping = false;
+            // IndexedDB writes are queued so an earlier, slower autosave can
+            // never finish after a newer save and restore stale document data.
+            this.saveQueue = Promise.resolve();
+            this.changeRevision = 0;
             this.init();
           }
           fresh() {
@@ -1704,17 +1708,33 @@
             this.commands();
           }
           dirty() {
+            this.changeRevision += 1;
             $("#statusText").textContent = "未保存";
             clearTimeout(this.autosave);
             this.autosave = setTimeout(() => this.save(true), 700);
             this.commands();
           }
           async save(auto = false) {
+            const revision = this.changeRevision;
+            // Capture the state when Save was requested. Passing the live
+            // object through a queue would otherwise save later edits under an
+            // earlier request and make the status indicator unreliable.
+            const snapshot = copy(this.state);
             try {
-              await this.db.put(STORE, "doc", this.state);
-              $("#statusText").textContent =
-                `保存済み ${new Date().toLocaleTimeString()}`;
-              if (!auto) toast("保存しました");
+              const write = this.saveQueue.then(() =>
+                this.db.put(STORE, "doc", snapshot),
+              );
+              // Keep the queue usable after a rejected write. The caller still
+              // observes the original rejection through `write` below.
+              this.saveQueue = write.catch(() => undefined);
+              await write;
+              if (revision === this.changeRevision) {
+                $("#statusText").textContent =
+                  `保存済み ${new Date().toLocaleTimeString()}`;
+                if (!auto) toast("保存しました");
+              } else if (!auto) {
+                toast("保存中に変更がありました。自動保存を続けます");
+              }
             } catch (error) {
               toast("保存できませんでした");
             }
