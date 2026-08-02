@@ -1938,6 +1938,7 @@
               this.sceneField("シーン名", "text", scene.name, (v, input) => {
                 const safe = String(v).trim() || "名称未設定";
                 input.value = safe;
+                if (scene.name === safe) return;
                 this.push();
                 scene.name = safe;
                 this.renderScenes();
@@ -1946,8 +1947,10 @@
             );
             box.append(
               this.sceneField("背景色", "color", scene.bg, (v) => {
+                const safe = color(v);
+                if (scene.bg === safe) return;
                 this.push();
-                scene.bg = color(v);
+                scene.bg = safe;
                 this.renderCanvas();
                 this.dirty();
               }),
@@ -1960,6 +1963,7 @@
                 (v, input) => {
                   const safe = clamp(v, 1, 86400, 10);
                   input.value = safe;
+                  if (scene.duration === safe) return;
                   this.push();
                   scene.duration = safe;
                   this.dirty();
@@ -3016,7 +3020,9 @@
                   : objects.length < 2
             )
               return;
-            this.push();
+            const originalPositions = new Map(
+              objects.map((object) => [object.id, { x: object.x, y: object.y }]),
+            );
             const minX = Math.min(...objects.map((o) => o.x));
             const maxR = Math.max(...objects.map((o) => o.x + o.w));
             const minY = Math.min(...objects.map((o) => o.y));
@@ -3054,6 +3060,24 @@
                 o.y = y;
                 y += o.h + gap;
               }
+            }
+            const changed = objects.some((object) => {
+              const original = originalPositions.get(object.id);
+              return object.x !== original.x || object.y !== original.y;
+            });
+            // 整列済みの対象で同じボタンを押しても、空の Undo 履歴を
+            // 作らない。push() には整列前の状態を渡す必要があるため、
+            // 計算結果を保持してから一度元の位置へ戻して履歴化する。
+            if (!changed) return;
+            const nextPositions = new Map(
+              objects.map((object) => [object.id, { x: object.x, y: object.y }]),
+            );
+            for (const object of objects) {
+              Object.assign(object, originalPositions.get(object.id));
+            }
+            this.push();
+            for (const object of objects) {
+              Object.assign(object, nextPositions.get(object.id));
             }
             this.renderAll();
             this.dirty();
