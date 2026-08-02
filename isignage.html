@@ -1275,6 +1275,7 @@
             this.propsFrame = 0;
             this.sessions = [];
             this.viewing = false;
+            this.startingView = false;
             this.stopping = false;
             this.init();
           }
@@ -2108,6 +2109,9 @@
                 : [...this.sel, object.id];
             else if (!this.sel.includes(object.id)) this.sel = [object.id];
             this.renderAll();
+            // Ctrl+クリックで選択を外したオブジェクトを、そのままドラッグ
+            // しても空の移動操作として履歴へ記録しない。
+            if (!this.sel.includes(object.id)) return;
             // ロック中も選択はできる。移動とサイズ変更だけを行わない。
             if (object.locked) return;
             const ids = this.sel.filter((id) => {
@@ -2901,19 +2905,29 @@
             this.dirty();
           }
           async startView() {
-            if (this.viewing || this.stopping) return;
-            await this.save(true);
-            this.viewing = true;
-            // シーン自動切替で進んだ位置を編集側へ持ち込まない。
-            this.editScene = this.state.lastScene;
-            $("#viewer").style.display = "flex";
-            this.renderViewScene();
-            this.fitView();
-            this.bumpCursor();
+            // 保存処理中のダブルクリックでも表示セッションを二重に作らない。
+            // 二重起動すると先行セッションのメディアやタイマーを後続の描画が
+            // 破棄し、再生開始直後に表示が止まることがある。
+            if (this.viewing || this.startingView || this.stopping) return;
+            this.startingView = true;
             try {
-              await $("#viewer").requestFullscreen();
-            } catch (error) {
-              toast("全画面表示できませんでした。通常表示で継続します。");
+              // 全画面要求に必要なユーザー操作の有効期間を、IndexedDB の
+              // 保存完了待ちで失わない。保存自体は要求と並行して継続する。
+              this.save(true);
+              this.viewing = true;
+              // シーン自動切替で進んだ位置を編集側へ持ち込まない。
+              this.editScene = this.state.lastScene;
+              $("#viewer").style.display = "flex";
+              this.renderViewScene();
+              this.fitView();
+              this.bumpCursor();
+              try {
+                await $("#viewer").requestFullscreen();
+              } catch (error) {
+                toast("全画面表示できませんでした。通常表示で継続します。");
+              }
+            } finally {
+              this.startingView = false;
             }
           }
           renderViewScene() {
