@@ -2327,10 +2327,38 @@
             document.onpointermove = null;
             document.onpointerup = null;
             document.onpointercancel = null;
-            const moved = Boolean(this.drag && this.drag.moved);
+            const drag = this.drag;
+            const moved = Boolean(drag && drag.moved);
+            const changed = Boolean(
+              moved &&
+                drag.ids.some((id) => {
+                  const object = this.current.objects.find(
+                    (item) => item.id === id,
+                  );
+                  const start = drag.start.get(id);
+                  return (
+                    object &&
+                    start &&
+                    (object.x !== start.x ||
+                      object.y !== start.y ||
+                      object.w !== start.w ||
+                      object.h !== start.h)
+                  );
+                }),
+            );
             this.drag = null;
             this.cancelPropsUpdate();
             if (!moved) return;
+            // A pointer can move while the object is already clamped at a
+            // canvas/size boundary, or return to its exact starting position.
+            // move() has saved the pre-drag snapshot by this point, so discard
+            // that empty history entry instead of making Undo appear to fail.
+            if (!changed) {
+              this.undoStack.pop();
+              this.commands();
+              this.renderAll();
+              return;
+            }
             this.renderAll();
             this.dirty();
           }
@@ -2340,6 +2368,8 @@
             this.range = {
               sx: (event.clientX - rect.left) / this.scale,
               sy: (event.clientY - rect.top) / this.scale,
+              clientX: event.clientX,
+              clientY: event.clientY,
               base: event.ctrlKey ? [...this.sel] : [],
               moved: false,
             };
@@ -2353,6 +2383,18 @@
           }
           rangeMove(event) {
             if (!this.range) return;
+            // Browsers may dispatch pointermove during a normal click because
+            // of tiny hand movement. Treat it as a click until the pointer has
+            // moved a few screen pixels, so clicking empty canvas reliably
+            // clears the selection rather than starting an accidental range.
+            if (
+              !this.range.moved &&
+              Math.hypot(
+                event.clientX - this.range.clientX,
+                event.clientY - this.range.clientY,
+              ) < 3
+            )
+              return;
             this.range.moved = true;
             const rect = $("#canvas").getBoundingClientRect();
             const x2 = (event.clientX - rect.left) / this.scale;
