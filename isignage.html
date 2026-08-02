@@ -950,7 +950,9 @@
               if (nextIndex >= this.files.length) {
                 if (!this.object.repeat) return null;
                 nextIndex = 0;
-                this.failed.clear();
+                // 読み込みに失敗した項目は、一覧の自動更新に成功するまで
+                // 候補へ戻さない。周回ごとに戻すと、壊れたファイルで毎回
+                // 待たされ、正常なファイルだけの連続表示を妨げてしまう。
               }
               this.index = nextIndex;
               if (!this.failed.has(nextIndex)) return nextIndex;
