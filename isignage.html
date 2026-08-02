@@ -1329,6 +1329,12 @@
               this.fit();
               this.fitView();
             });
+            // Releasing the pointer outside the browser can omit pointerup.
+            // Finish the operation when the window loses focus so a later
+            // pointer movement cannot unexpectedly continue an old drag.
+            window.addEventListener("blur", () =>
+              this.cancelActivePointerInteraction(),
+            );
             document.addEventListener("fullscreenchange", () =>
               this.fullscreenChanged(),
             );
@@ -2137,6 +2143,7 @@
             };
             document.onpointermove = (moveEvent) => this.move(moveEvent);
             document.onpointerup = () => this.endDrag();
+            document.onpointercancel = () => this.endDrag();
           }
           move(event) {
             if (!this.drag) return;
@@ -2216,6 +2223,7 @@
           endDrag() {
             document.onpointermove = null;
             document.onpointerup = null;
+            document.onpointercancel = null;
             const moved = Boolean(this.drag && this.drag.moved);
             this.drag = null;
             this.cancelPropsUpdate();
@@ -2238,6 +2246,7 @@
             $("#canvas").append(box);
             document.onpointermove = (moveEvent) => this.rangeMove(moveEvent);
             document.onpointerup = () => this.rangeEnd();
+            document.onpointercancel = () => this.rangeEnd();
           }
           rangeMove(event) {
             if (!this.range) return;
@@ -2275,6 +2284,7 @@
           rangeEnd() {
             document.onpointermove = null;
             document.onpointerup = null;
+            document.onpointercancel = null;
             const box = $("#selectionBox");
             if (box) box.remove();
             // 空白を範囲選択せずにクリックした場合は選択解除にする。
@@ -2283,6 +2293,10 @@
             this.range = null;
             this.cancelPropsUpdate();
             this.renderAll();
+          }
+          cancelActivePointerInteraction() {
+            if (this.drag) this.endDrag();
+            else if (this.range) this.rangeEnd();
           }
           schedulePropsUpdate() {
             // ポインター移動ごとの再構築は重いので1フレームにまとめる。
