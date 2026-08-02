@@ -1798,7 +1798,9 @@
             );
           }
           setScenesCollapsed(collapsed) {
-            this.state.ui.scenesCollapsed = Boolean(collapsed);
+            const next = Boolean(collapsed);
+            if (this.state.ui.scenesCollapsed === next) return;
+            this.state.ui.scenesCollapsed = next;
             this.applyScenePanelState();
             this.fit();
             this.dirty();
@@ -2548,8 +2550,17 @@
               input.tabIndex = -1;
             } else {
               input.onchange = () => {
-                this.push();
                 const safe = this.safeValue(path, type, input);
+                // onchange can still fire after a value was changed and then put
+                // back to its original value. Do not insert an empty Undo step;
+                // otherwise the next Ctrl+Z appears to do nothing and staff can
+                // accidentally undo an older, unrelated edit on the second try.
+                if (
+                  objects.every((object) => Object.is(this.get(object, path), safe))
+                ) {
+                  return;
+                }
+                this.push();
                 for (const object of objects) {
                   this.set(object, path, safe);
                   Object.assign(object, this.normalizeObject(object));
@@ -2735,7 +2746,7 @@
           doubleClick(object) {
             if (object.type !== "text") return;
             const text = prompt("テキスト内容", object.text);
-            if (text !== null) {
+            if (text !== null && text !== object.text) {
               this.push();
               object.text = text;
               this.renderAll();
@@ -2775,33 +2786,39 @@
               return;
             if (event.key === "Delete" && this.sel.length)
               this.deleteSelection();
-            if (event.ctrlKey && event.key.toLowerCase() === "c") {
+            const commandKey = event.ctrlKey || event.metaKey;
+            const key = event.key.toLowerCase();
+            if (commandKey && key === "c") {
               this.clip = this.current.objects
                 .filter((object) => this.sel.includes(object.id))
                 .map(copy);
               event.preventDefault();
               this.commands();
             }
-            if (event.ctrlKey && event.key.toLowerCase() === "v") {
+            if (commandKey && key === "v") {
               this.paste();
               event.preventDefault();
             }
-            if (event.ctrlKey && event.key.toLowerCase() === "d") {
+            if (commandKey && key === "d") {
               this.clip = this.current.objects
                 .filter((object) => this.sel.includes(object.id))
                 .map(copy);
               this.paste();
               event.preventDefault();
             }
-            if (event.ctrlKey && event.key.toLowerCase() === "z") {
-              this.undo();
+            if (commandKey && key === "z") {
+              // Ctrl/Cmd+Shift+Z is the standard Redo shortcut. Previously it
+              // matched the plain Ctrl+Z branch and unexpectedly undid another
+              // operation instead.
+              if (event.shiftKey) this.redo();
+              else this.undo();
               event.preventDefault();
             }
-            if (event.ctrlKey && event.key.toLowerCase() === "y") {
+            if (commandKey && key === "y") {
               this.redo();
               event.preventDefault();
             }
-            if (event.ctrlKey && event.key.toLowerCase() === "a") {
+            if (commandKey && key === "a") {
               this.sel = this.current.objects.map((object) => object.id);
               this.renderAll();
               event.preventDefault();
