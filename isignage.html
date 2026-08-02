@@ -994,7 +994,7 @@
               // 失敗件数が溜まらず再生不能の案内へ到達できない。
               media.onloadeddata = () => this.failed.delete(index);
               media.onended = () => this.next();
-              media.play().catch(() => this.fail(index, media));
+              this.app.playVideo(media, () => this.fail(index, media));
             } else {
               // Count the display duration after decoding has completed. Starting
               // the timer before load could skip large local images entirely.
@@ -2065,9 +2065,41 @@
               media.loop = object.loop;
               media.muted = object.muted;
               media.controls = object.controls && !view;
-              if (view) media.play().catch(() => undefined);
+              if (view) this.playVideo(media);
             }
             box.append(media);
+          }
+          async playVideo(media, onFailure = () => undefined) {
+            try {
+              await media.play();
+            } catch (error) {
+              // 音声付き自動再生だけがブラウザに拒否された場合、正常な動画を
+              // 壊れたファイルとして除外したり、黒画面のまま止めたりしない。
+              // 表示セッション中だけミュートへフォールバックし、設定値自体は
+              // 変更しないため、次回はブラウザ側で許可されれば音声を再試行する。
+              if (
+                error?.name === "NotAllowedError" &&
+                !media.muted &&
+                media.isConnected
+              ) {
+                media.muted = true;
+                try {
+                  await media.play();
+                  if (!this.autoplayMutedNoticeShown) {
+                    this.autoplayMutedNoticeShown = true;
+                    toast(
+                      "音声付き自動再生が制限されたため、動画をミュートで再生します",
+                    );
+                  }
+                  return;
+                } catch (retryError) {
+                  if (retryError?.name === "AbortError") return;
+                }
+              } else if (error?.name === "AbortError") {
+                return;
+              }
+              onFailure();
+            }
           }
           player(box, object, view) {
             if (!view) {
@@ -2929,6 +2961,7 @@
               // 保存完了待ちで失わない。保存自体は要求と並行して継続する。
               this.save(true);
               this.viewing = true;
+              this.autoplayMutedNoticeShown = false;
               // シーン自動切替で進んだ位置を編集側へ持ち込まない。
               this.editScene = this.state.lastScene;
               $("#viewer").style.display = "flex";
