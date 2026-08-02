@@ -2686,11 +2686,11 @@
               );
               if (update) {
                 object.folderName = handle.name;
-                object.imageCount = files.filter((file) =>
-                  IMG.test(file.name),
+                object.imageCount = files.filter((entry) =>
+                  IMG.test(entry.relativePath),
                 ).length;
-                object.videoCount = files.filter((file) =>
-                  VID.test(file.name),
+                object.videoCount = files.filter((entry) =>
+                  VID.test(entry.relativePath),
                 ).length;
                 object.totalCount = files.length;
                 object.lastRefreshAt = new Date().toLocaleString();
