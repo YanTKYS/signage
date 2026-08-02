@@ -2634,16 +2634,61 @@
           }
           z(action) {
             if (!this.sel.length) return;
-            this.push();
-            for (const object of this.current.objects.filter((item) =>
-              this.sel.includes(item.id),
-            )) {
-              if (action === "front")
-                object.z = Date.now() + Math.random() * 1000;
-              if (action === "back") object.z = 0;
-              if (action === "forward") object.z += 1000;
-              if (action === "backward") object.z -= 1000;
+            const selected = new Set(this.sel);
+            const ordered = [...this.current.objects].sort(
+              (a, b) => a.z - b.z,
+            );
+            const before = ordered.map((object) => object.id).join("\n");
+            if (action === "front" || action === "back") {
+              const chosen = ordered.filter((object) =>
+                selected.has(object.id),
+              );
+              const rest = ordered.filter(
+                (object) => !selected.has(object.id),
+              );
+              ordered.splice(
+                0,
+                ordered.length,
+                ...(action === "front"
+                  ? [...rest, ...chosen]
+                  : [...chosen, ...rest]),
+              );
+            } else if (action === "forward") {
+              for (let index = ordered.length - 2; index >= 0; index -= 1) {
+                if (
+                  selected.has(ordered[index].id) &&
+                  !selected.has(ordered[index + 1].id)
+                ) {
+                  [ordered[index], ordered[index + 1]] = [
+                    ordered[index + 1],
+                    ordered[index],
+                  ];
+                }
+              }
+            } else if (action === "backward") {
+              for (let index = 1; index < ordered.length; index += 1) {
+                if (
+                  selected.has(ordered[index].id) &&
+                  !selected.has(ordered[index - 1].id)
+                ) {
+                  [ordered[index], ordered[index - 1]] = [
+                    ordered[index - 1],
+                    ordered[index],
+                  ];
+                }
+              }
+            } else {
+              return;
             }
+            if (before === ordered.map((object) => object.id).join("\n")) {
+              return;
+            }
+            this.push();
+            // 外部JSON由来の巨大値や同値を排除し、以後も確実に一段ずつ
+            // 移動できるよう、現在の描画順を連番へ正規化する。
+            ordered.forEach((object, index) => {
+              object.z = index;
+            });
             this.renderAll();
             this.dirty();
           }
