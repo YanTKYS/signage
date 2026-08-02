@@ -732,6 +732,11 @@
           if (!Number.isFinite(number)) return fallback;
           return Math.max(min, Math.min(max, number));
         }
+        function clampInteger(value, min, max, fallback) {
+          const number = Number(value);
+          if (!Number.isFinite(number)) return fallback;
+          return Math.max(min, Math.min(max, Math.trunc(number)));
+        }
         function color(value, fallback = "#ffffff") {
           if (typeof value === "string" && /^#[0-9a-f]{8}$/i.test(value))
             return value.slice(0, 7);
@@ -1413,7 +1418,7 @@
               .map((scene, index) => this.normalizeScene(scene, index))
               .filter(Boolean);
             if (!state.scenes.length) state.scenes = [this.scene("通常画面")];
-            state.lastScene = clamp(
+            state.lastScene = clampInteger(
               raw.lastScene,
               0,
               state.scenes.length - 1,
@@ -1542,8 +1547,8 @@
                   typeof source.folderName === "string"
                     ? source.folderName
                     : object.folderName,
-                imageCount: clamp(source.imageCount, 0, 1000000, 0),
-                videoCount: clamp(source.videoCount, 0, 1000000, 0),
+                imageCount: clampInteger(source.imageCount, 0, 1000000, 0),
+                videoCount: clampInteger(source.videoCount, 0, 1000000, 0),
                 order: source.order === "random" ? "random" : "name",
                 repeat: source.repeat !== false,
                 imageSeconds: clamp(source.imageSeconds, 1, 86400, 5),
@@ -2693,8 +2698,11 @@
             this.dirty();
           }
           align(action) {
-            const objects = this.current.objects.filter((object) =>
-              this.sel.includes(object.id),
+            // ロックはドラッグやキー移動だけでなく、整列操作でも尊重する。
+            // 選択中のロック済みオブジェクトを基準点にも含めないことで、
+            // 見た目上は操作できないはずの要素が間接的に配置へ影響するのを防ぐ。
+            const objects = this.current.objects.filter(
+              (object) => this.sel.includes(object.id) && !object.locked,
             );
             if (
               action === "centerCanvas"
