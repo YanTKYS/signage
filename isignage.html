@@ -773,12 +773,17 @@
             this.urls.set(key, url);
             return url;
           }
-          revoke(key) {
+          revoke(key, expectedUrl = null) {
             const url = this.urls.get(key);
-            if (url) {
+            // Re-rendering replaces an Object URL under the same key. A load
+            // error from the detached, previous media element can arrive
+            // afterwards, so it must not revoke the replacement URL.
+            if (url && (!expectedUrl || url === expectedUrl)) {
               URL.revokeObjectURL(url);
               this.urls.delete(key);
+              return true;
             }
+            return false;
           }
           revokePrefix(prefix) {
             for (const key of [...this.urls.keys()]) {
@@ -2051,7 +2056,9 @@
             media.style.height = "100%";
             media.style.objectFit = object.fit;
             media.onerror = () => {
-              this.urls.revoke(key);
+              // Ignore a late error raised by media detached during a render.
+              // The same key may already belong to the newly rendered element.
+              if (!this.urls.revoke(key, url)) return;
               box.textContent = "";
               this.fallback(
                 box,
