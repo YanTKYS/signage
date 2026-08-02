@@ -1433,6 +1433,8 @@
           normalizeState(raw, existingDoc = false) {
             const state = this.fresh();
             if (!raw || typeof raw !== "object") return state;
+            const sceneIds = new Set();
+            const objectIds = new Set();
             const rawUi = raw.ui && typeof raw.ui === "object" ? raw.ui : {};
             state.ui = {
               grid: Boolean(rawUi.grid),
@@ -1449,7 +1451,9 @@
             };
             const scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
             state.scenes = scenes
-              .map((scene, index) => this.normalizeScene(scene, index))
+              .map((scene, index) =>
+                this.normalizeScene(scene, index, sceneIds, objectIds),
+              )
               .filter(Boolean);
             if (!state.scenes.length) state.scenes = [this.scene("通常画面")];
             state.lastScene = clampInteger(
@@ -1459,6 +1463,15 @@
               0,
             );
             return state;
+          }
+          uniqueId(candidate, usedIds) {
+            let id =
+              typeof candidate === "string" && candidate.trim()
+                ? candidate
+                : uid();
+            while (usedIds.has(id)) id = uid();
+            usedIds.add(id);
+            return id;
           }
           isBackupShape(raw) {
             if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -1486,10 +1499,15 @@
               );
             });
           }
-          normalizeScene(scene, index) {
+          normalizeScene(
+            scene,
+            index,
+            sceneIds = new Set(),
+            objectIds = new Set(),
+          ) {
             if (!scene || typeof scene !== "object") return null;
             return {
-              id: typeof scene.id === "string" ? scene.id : uid(),
+              id: this.uniqueId(scene.id, sceneIds),
               name:
                 typeof scene.name === "string" && scene.name.trim()
                   ? scene.name.trim()
@@ -1498,12 +1516,12 @@
               duration: clamp(scene.duration, 1, 86400, 10),
               objects: Array.isArray(scene.objects)
                 ? scene.objects
-                    .map((object) => this.normalizeObject(object))
+                    .map((object) => this.normalizeObject(object, objectIds))
                     .filter(Boolean)
                 : [],
             };
           }
-          normalizeObject(source) {
+          normalizeObject(source, usedIds = null) {
             if (
               !source ||
               typeof source !== "object" ||
@@ -1513,7 +1531,11 @@
             const object = this.make(source.type);
             if (!object) return null;
             Object.assign(object, {
-              id: typeof source.id === "string" ? source.id : uid(),
+              id: usedIds
+                ? this.uniqueId(source.id, usedIds)
+                : typeof source.id === "string" && source.id.trim()
+                  ? source.id
+                  : uid(),
               name:
                 typeof source.name === "string" && source.name.trim()
                   ? source.name.trim()
