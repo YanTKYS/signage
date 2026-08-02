@@ -2923,8 +2923,19 @@
               this.bumpCursor();
               try {
                 await $("#viewer").requestFullscreen();
+                // requestFullscreen() can remain pending while the browser is
+                // asking the user for permission. If Esc stopped the viewer in
+                // the meantime, its late success must not leave the hidden
+                // editing screen trapped in fullscreen mode.
+                if (!this.viewing && document.fullscreenElement) {
+                  await document.exitFullscreen().catch(() => undefined);
+                }
               } catch (error) {
-                toast("全画面表示できませんでした。通常表示で継続します。");
+                // Stopping while the request is pending is an intentional
+                // cancellation, not a fullscreen failure that needs a toast.
+                if (this.viewing) {
+                  toast("全画面表示できませんでした。通常表示で継続します。");
+                }
               }
             } finally {
               this.startingView = false;
