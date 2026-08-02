@@ -866,6 +866,7 @@
             this.played = new Set();
             this.switchTimer = null;
             this.refreshTimer = null;
+            this.refreshing = false;
             this.media = null;
             this.stopped = false;
             this.idle = true;
@@ -906,10 +907,19 @@
             this.object.refreshMinutes = minutes;
             this.refreshTimer = setInterval(
               async () => {
-                const nextFiles = await this.app.scanPlayer(this.object, false);
-                if (this.stopped || nextFiles === null) {
-                  return;
+                // Large folders can take longer to scan than the configured
+                // interval.  Do not accumulate overlapping directory walks;
+                // apart from wasting resources, an older scan could otherwise
+                // overwrite a newer result after it eventually completes.
+                if (this.refreshing) return;
+                this.refreshing = true;
+                let nextFiles;
+                try {
+                  nextFiles = await this.app.scanPlayer(this.object, false);
+                } finally {
+                  this.refreshing = false;
                 }
+                if (this.stopped || nextFiles === null) return;
                 this.files = nextFiles;
                 this.failed.clear();
                 this.played.clear();
@@ -2072,9 +2082,13 @@
               media.loop = object.loop;
               media.muted = object.muted;
               media.controls = object.controls && !view;
-              if (view) this.playVideo(media);
             }
             box.append(media);
+            // play() should run only after the element is connected.  In
+            // particular, the muted retry path intentionally checks
+            // isConnected, and some browsers reject playback for detached
+            // media even though the same local file is valid.
+            if (object.type === "video" && view) this.playVideo(media);
           }
           async playVideo(media, onFailure = () => undefined) {
             try {
