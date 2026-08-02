@@ -2834,15 +2834,49 @@
             if (!movable.length) {
               return;
             }
-            this.push();
             const amount = event.shiftKey ? 10 : 1;
-            for (const object of movable) {
-              if (event.key === "ArrowLeft") object.x -= amount;
-              if (event.key === "ArrowRight") object.x += amount;
-              if (event.key === "ArrowUp") object.y -= amount;
-              if (event.key === "ArrowDown") object.y += amount;
-              object.x = clamp(object.x, -object.w + 20, W - 20, object.x);
-              object.y = clamp(object.y, -object.h + 20, H - 20, object.y);
+            const dx =
+              event.key === "ArrowLeft"
+                ? -amount
+                : event.key === "ArrowRight"
+                  ? amount
+                  : 0;
+            const dy =
+              event.key === "ArrowUp"
+                ? -amount
+                : event.key === "ArrowDown"
+                  ? amount
+                  : 0;
+            const positions = movable.map((object) => ({
+              object,
+              x: clamp(
+                object.x + dx,
+                -object.w + 20,
+                W - 20,
+                object.x,
+              ),
+              y: clamp(
+                object.y + dy,
+                -object.h + 20,
+                H - 20,
+                object.y,
+              ),
+            }));
+            // 境界に達したオブジェクトへ外向きのキー操作をしても、実際の
+            // 配置は変わらない。その操作を履歴と未保存状態へ記録すると、
+            // Undo が一度空振りして通常の編集作業を混乱させてしまう。
+            if (
+              !positions.some(
+                ({ object, x, y }) => object.x !== x || object.y !== y,
+              )
+            ) {
+              event.preventDefault();
+              return;
+            }
+            this.push();
+            for (const { object, x, y } of positions) {
+              object.x = x;
+              object.y = y;
             }
             this.renderAll();
             this.dirty();
