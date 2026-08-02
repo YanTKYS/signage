@@ -2099,7 +2099,7 @@
               object.style.fillAlpha,
             );
             box.style.border = `${object.style.strokeWidth}px solid ${object.style.stroke}`;
-            box.style.borderRadius = `${object.shape === "round" ? object.style.radius || 30 : object.style.radius}px`;
+            box.style.borderRadius = `${object.style.radius}px`;
           }
           singleMedia(box, object, view) {
             if (!object.file) {
