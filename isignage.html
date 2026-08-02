@@ -792,10 +792,15 @@
         class DBM {
           async open() {
             return new Promise((resolve, reject) => {
-              const req = indexedDB.open(DB, 1);
+              const req = indexedDB.open(DB, 2);
               req.onupgradeneeded = () => {
-                req.result.createObjectStore(STORE);
-                req.result.createObjectStore(HANDLES);
+                // 旧版や作成途中のDBに片方のストアだけが存在しても、
+                // ConstraintError でアップグレード全体を中断しない。
+                for (const name of [STORE, HANDLES]) {
+                  if (!req.result.objectStoreNames.contains(name)) {
+                    req.result.createObjectStore(name);
+                  }
+                }
               };
               req.onsuccess = () => {
                 this.db = req.result;
@@ -2137,6 +2142,11 @@
             }
             object.w = clamp(width, 20, W * 2, start.w);
             object.h = clamp(height, 20, H * 2, start.h);
+            // 左辺・上辺のハンドルは、最小/最大サイズへ補正された後も
+            // 反対側の辺を固定する。補正前の x/y を使うと、ハンドルを
+            // 反対側の辺より先へ動かした際にオブジェクト全体がずれる。
+            if (handle.includes("w")) x = start.x + start.w - object.w;
+            if (handle.includes("n")) y = start.y + start.h - object.h;
             object.x = clamp(x, -object.w + 20, W - 20, start.x);
             object.y = clamp(y, -object.h + 20, H - 20, start.y);
           }
