@@ -2469,7 +2469,14 @@
                 return null;
               }
               const files = [];
-              await this.scanDir(handle, files, object.subfolders, "");
+              const scanResult = { skipped: 0 };
+              await this.scanDir(
+                handle,
+                files,
+                object.subfolders,
+                "",
+                scanResult,
+              );
               files.sort((a, b) =>
                 a.relativePath.localeCompare(b.relativePath, "ja", {
                   numeric: true,
@@ -2485,9 +2492,11 @@
                 ).length;
                 object.totalCount = files.length;
                 object.lastRefreshAt = new Date().toLocaleString();
-                object.lastRefreshStatus = files.length
-                  ? "更新済み"
-                  : "再生可能なファイルがありません";
+                object.lastRefreshStatus = scanResult.skipped
+                  ? `更新済み（一部読込失敗: ${scanResult.skipped}件）`
+                  : files.length
+                    ? "更新済み"
+                    : "再生可能なファイルがありません";
                 toast("フォルダを更新しました");
               }
               return files.map((entry) => entry.file);
@@ -2500,21 +2509,39 @@
               return null;
             }
           }
-          async scanDir(dir, files, subfolders, basePath) {
+          async scanDir(dir, files, subfolders, basePath, result) {
             for await (const [name, handle] of dir.entries()) {
               const relativePath = basePath ? `${basePath}/${name}` : name;
               if (
                 handle.kind === "file" &&
                 (IMG.test(name) || VID.test(name))
               ) {
-                const file = await handle.getFile();
-                Object.defineProperty(file, "relativePath", {
-                  value: relativePath,
-                  configurable: true,
-                });
-                files.push({ file, relativePath });
+                try {
+                  const file = await handle.getFile();
+                  Object.defineProperty(file, "relativePath", {
+                    value: relativePath,
+                    configurable: true,
+                  });
+                  files.push({ file, relativePath });
+                } catch (error) {
+                  // One deleted or unreadable file must not hide every other
+                  // playable item in the selected directory.
+                  result.skipped += 1;
+                }
               } else if (subfolders && handle.kind === "directory") {
-                await this.scanDir(handle, files, true, relativePath);
+                try {
+                  await this.scanDir(
+                    handle,
+                    files,
+                    true,
+                    relativePath,
+                    result,
+                  );
+                } catch (error) {
+                  // A subdirectory can independently lose permission while the
+                  // selected root remains readable. Continue with its siblings.
+                  result.skipped += 1;
+                }
               }
             }
           }
