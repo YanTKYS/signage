@@ -920,17 +920,20 @@
           }
           chooseIndex() {
             if (this.object.order === "random") {
-              let candidates = this.files
+              const playable = this.files
                 .map((_, index) => index)
-                .filter(
-                  (index) =>
-                    !this.played.has(index) && !this.failed.has(index),
-                );
+                .filter((index) => !this.failed.has(index));
+              // 失敗したファイルを周回開始時に候補へ戻すと、全ファイルが
+              // 壊れている場合に再試行が永久に続く。失敗記録はファイル一覧が
+              // 更新されるまで保持し、再生可能な候補が尽きたことを通知する。
+              if (!playable.length) return null;
+              let candidates = playable.filter(
+                (index) => !this.played.has(index),
+              );
               if (!candidates.length) {
                 if (!this.object.repeat) return null;
                 this.played.clear();
-                this.failed.clear();
-                candidates = this.files.map((_, index) => index);
+                candidates = playable;
               }
               const withoutPrevious = candidates.filter(
                 (index) => index !== this.lastRandom,
