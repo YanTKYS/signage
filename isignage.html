@@ -867,6 +867,10 @@
           }
           async start() {
             this.files = await this.app.scanPlayer(this.object, false);
+            // A directory scan can finish after the viewer has already moved to
+            // another scene.  Do not resurrect playback or its refresh timer
+            // after stop() has disposed this session.
+            if (this.stopped) return;
             if (this.files === null) {
               this.fallback(
                 "フォルダを読み込めません。\nフォルダを再選択するか権限を確認してください。",
@@ -891,7 +895,7 @@
             this.container.textContent = "";
           }
           startAutoRefresh() {
-            if (!this.object.autoRefresh) return;
+            if (this.stopped || !this.object.autoRefresh) return;
             const minutes = clamp(this.object.refreshMinutes, 1, 1440, 5);
             this.object.refreshMinutes = minutes;
             this.refreshTimer = setInterval(
@@ -2204,6 +2208,8 @@
               });
             const selected = new Set(this.range.base);
             for (const object of this.current.objects) {
+              // Hidden objects have no selectable area on the canvas.
+              if (!object.visible) continue;
               const hit = !(
                 right < object.x ||
                 left > object.x + object.w ||
@@ -3068,12 +3074,18 @@
           }
           commands() {
             const count = this.sel.length;
+            const movableCount = this.current.objects.filter(
+              (object) => this.sel.includes(object.id) && !object.locked,
+            ).length;
             for (const b of document.querySelectorAll("[data-needs-selection]"))
               b.disabled = count === 0;
             for (const b of document.querySelectorAll("[data-needs-multi]"))
-              b.disabled = count < 2;
+              b.disabled = movableCount < 2;
             for (const b of document.querySelectorAll("[data-needs-three]"))
-              b.disabled = count < 3;
+              b.disabled = movableCount < 3;
+            // Unlike layer controls, canvas centering changes geometry and must
+            // follow the same locking rule as the other alignment commands.
+            $("#centerCanvas").disabled = movableCount === 0;
             $("#delScene").disabled = this.state.scenes.length < 2;
             $("#sceneUp").disabled = this.state.lastScene === 0;
             $("#sceneDown").disabled =
