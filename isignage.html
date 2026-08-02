@@ -858,6 +858,7 @@
             this.index = -1;
             this.lastRandom = -1;
             this.failed = new Set();
+            this.played = new Set();
             this.switchTimer = null;
             this.refreshTimer = null;
             this.media = null;
@@ -906,6 +907,7 @@
                 }
                 this.files = nextFiles;
                 this.failed.clear();
+                this.played.clear();
                 this.lastRandom = -1;
                 this.index = Math.min(this.index, this.files.length - 1);
                 if (this.idle && this.files.length) {
@@ -917,17 +919,28 @@
             );
           }
           chooseIndex() {
-            if (this.object.order === "random" && this.files.length > 1) {
-              for (let attempt = 0; attempt < 10; attempt += 1) {
-                const candidate = Math.floor(Math.random() * this.files.length);
-                if (
-                  candidate !== this.lastRandom &&
-                  !this.failed.has(candidate)
-                ) {
-                  this.lastRandom = candidate;
-                  return candidate;
-                }
+            if (this.object.order === "random") {
+              let candidates = this.files
+                .map((_, index) => index)
+                .filter(
+                  (index) =>
+                    !this.played.has(index) && !this.failed.has(index),
+                );
+              if (!candidates.length) {
+                if (!this.object.repeat) return null;
+                this.played.clear();
+                this.failed.clear();
+                candidates = this.files.map((_, index) => index);
               }
+              const withoutPrevious = candidates.filter(
+                (index) => index !== this.lastRandom,
+              );
+              if (withoutPrevious.length) candidates = withoutPrevious;
+              const candidate =
+                candidates[Math.floor(Math.random() * candidates.length)];
+              this.lastRandom = candidate;
+              this.played.add(candidate);
+              return candidate;
             }
             for (let attempt = 0; attempt < this.files.length; attempt += 1) {
               let nextIndex = this.index + 1;
@@ -974,15 +987,20 @@
               // 実際に読み込めたときだけ失敗記録を消す。
               // 表示開始時に消すと、全ファイルが壊れていても
               // 失敗件数が溜まらず再生不能の案内へ到達できない。
-              media.onloadeddata = () => this.failed.clear();
+              media.onloadeddata = () => this.failed.delete(index);
               media.onended = () => this.next();
               media.play().catch(() => this.fail(index, media));
             } else {
-              media.onload = () => this.failed.clear();
-              this.switchTimer = setTimeout(
-                () => this.next(),
-                this.object.imageSeconds * 1000,
-              );
+              // Count the display duration after decoding has completed. Starting
+              // the timer before load could skip large local images entirely.
+              media.onload = () => {
+                if (this.stopped || this.media !== media) return;
+                this.failed.delete(index);
+                this.switchTimer = setTimeout(
+                  () => this.next(),
+                  this.object.imageSeconds * 1000,
+                );
+              };
             }
           }
           fail(index, media) {
