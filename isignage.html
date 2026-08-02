@@ -798,6 +798,12 @@
           async open() {
             return new Promise((resolve, reject) => {
               const req = indexedDB.open(DB, 2);
+              let settled = false;
+              const fail = (error) => {
+                if (settled) return;
+                settled = true;
+                reject(error);
+              };
               req.onupgradeneeded = () => {
                 // 旧版や作成途中のDBに片方のストアだけが存在しても、
                 // ConstraintError でアップグレード全体を中断しない。
@@ -808,10 +814,29 @@
                 }
               };
               req.onsuccess = () => {
+                // A blocked request can succeed after initialization has
+                // already continued without storage. Do not retain an
+                // unmanaged connection in that case.
+                if (settled) {
+                  req.result.close();
+                  return;
+                }
+                settled = true;
                 this.db = req.result;
+                // Release this connection when another tab needs to upgrade
+                // the schema instead of leaving that tab waiting indefinitely.
+                this.db.onversionchange = () => {
+                  this.db.close();
+                  this.db = null;
+                };
                 resolve();
               };
-              req.onerror = () => reject(req.error);
+              req.onerror = () => fail(req.error);
+              // Without this handler the initialization Promise stays pending
+              // while an older iSignage tab blocks the schema upgrade. bind()
+              // then never runs and the entire interface appears frozen.
+              req.onblocked = () =>
+                fail(new Error("IndexedDB upgrade was blocked"));
             });
           }
           store(name, mode = "readonly") {
