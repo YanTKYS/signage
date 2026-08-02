@@ -965,7 +965,7 @@
             media.style.width = "100%";
             media.style.height = "100%";
             media.style.objectFit = this.object.fit;
-            media.onerror = () => this.fail(index);
+            media.onerror = () => this.fail(index, media);
             this.media = media;
             this.container.append(media);
             if (isVideo) {
@@ -976,7 +976,7 @@
               // 失敗件数が溜まらず再生不能の案内へ到達できない。
               media.onloadeddata = () => this.failed.clear();
               media.onended = () => this.next();
-              media.play().catch(() => this.fail(index));
+              media.play().catch(() => this.fail(index, media));
             } else {
               media.onload = () => this.failed.clear();
               this.switchTimer = setTimeout(
@@ -985,8 +985,10 @@
               );
             }
           }
-          fail(index) {
-            if (this.stopped) return;
+          fail(index, media) {
+            // play() の Promise は detach() では取り消せない。前の動画の
+            // reject が次のメディア表示後に届いても、現在の再生を止めない。
+            if (this.stopped || this.media !== media) return;
             this.failed.add(index);
             this.detach();
             this.app.urls.revoke(this.urlKey);
