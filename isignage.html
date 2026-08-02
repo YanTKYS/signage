@@ -2084,11 +2084,16 @@
               media.controls = object.controls && !view;
             }
             box.append(media);
-            // play() should run only after the element is connected.  In
-            // particular, the muted retry path intentionally checks
-            // isConnected, and some browsers reject playback for detached
-            // media even though the same local file is valid.
-            if (object.type === "video" && view) this.playVideo(media);
+            // element() returns this subtree before renderCanvas() attaches it
+            // to the document. Defer play() until that synchronous render has
+            // finished; calling it here can reject otherwise valid local videos
+            // as detached media in Chromium. The connection check also prevents
+            // a queued start from reviving playback after the viewer was closed.
+            if (object.type === "video" && view) {
+              queueMicrotask(() => {
+                if (this.viewing && media.isConnected) this.playVideo(media);
+              });
+            }
           }
           async playVideo(media, onFailure = () => undefined) {
             try {
