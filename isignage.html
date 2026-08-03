@@ -88,7 +88,15 @@
         flex-wrap: wrap;
       }
       .toolbar {
+        flex-wrap: wrap;
         background: #fbfdff;
+      }
+      /* 1366×768 のような業務用画面では、ボタンが押し縮められて
+         ラベルが途中で改行され読み取れなくなる。縮小させず、
+         収まらない分は次の行へ折り返す。 */
+      .toolbar > * {
+        flex: 0 0 auto;
+        white-space: nowrap;
       }
       .main {
         display: grid;
@@ -1313,6 +1321,8 @@
             this.drag = null;
             this.range = null;
             this.propsFrame = 0;
+            this.propInputs = [];
+            this.propSignature = "";
             this.sessions = [];
             this.viewing = false;
             this.startingView = false;
@@ -1961,6 +1971,12 @@
                 "number",
                 scene.duration,
                 (v, input) => {
+                  // 空欄のまま確定しても 1 秒へ潰さない。入力し直す前に
+                  // 欄外をクリックしただけでシーンが毎秒切り替わってしまう。
+                  if (!String(v).trim()) {
+                    input.value = scene.duration;
+                    return;
+                  }
                   const safe = clamp(v, 1, 86400, 10);
                   input.value = safe;
                   if (scene.duration === safe) return;
@@ -2218,12 +2234,16 @@
           startDrag(event, object, handle = null) {
             event.stopPropagation();
             if (!object) return;
+            const before = this.sel.join(",");
             if (event.ctrlKey)
               this.sel = this.sel.includes(object.id)
                 ? this.sel.filter((id) => id !== object.id)
                 : [...this.sel, object.id];
             else if (!this.sel.includes(object.id)) this.sel = [object.id];
-            this.renderAll();
+            // 選択済みのオブジェクトを掴み直しただけでキャンバスを作り直すと、
+            // 表示中の画像と動画がすべて読み込み直され、動画は先頭へ戻る。
+            // 選択が実際に変わったときだけ再描画する。
+            if (this.sel.join(",") !== before) this.renderAll();
             // Ctrl+クリックで選択を外したオブジェクトを、そのままドラッグ
             // しても空の移動操作として履歴へ記録しない。
             if (!this.sel.includes(object.id)) return;
@@ -2359,13 +2379,17 @@
             // canvas/size boundary, or return to its exact starting position.
             // move() has saved the pre-drag snapshot by this point, so discard
             // that empty history entry instead of making Undo appear to fail.
+            // move() が対象の DOM を更新済みなので、キャンバスを作り直す
+            // 必要はない。作り直すと画像と動画が読み込み直され、移動の度に
+            // 表示がちらついて動画は先頭へ戻ってしまう。
             if (!changed) {
               this.undoStack.pop();
+              this.syncProps();
               this.commands();
-              this.renderAll();
               return;
             }
-            this.renderAll();
+            this.syncProps();
+            this.commands();
             this.dirty();
           }
           startRange(event) {
@@ -2377,6 +2401,7 @@
               clientX: event.clientX,
               clientY: event.clientY,
               base: event.ctrlKey ? [...this.sel] : [],
+              before: this.sel.join(","),
               moved: false,
             };
             const box = document.createElement("div");
@@ -2441,9 +2466,16 @@
             // 空白を範囲選択せずにクリックした場合は選択解除にする。
             if (this.range && !this.range.moved)
               this.sel = [...this.range.base];
+            const before = this.range ? this.range.before : null;
             this.range = null;
             this.cancelPropsUpdate();
-            this.renderAll();
+            // 選択が変わらないクリックでは、画像と動画を読み込み直さない。
+            if (before === null || this.sel.join(",") !== before) {
+              this.renderAll();
+              return;
+            }
+            this.syncProps();
+            this.commands();
           }
           cancelActivePointerInteraction() {
             if (this.drag) this.endDrag();
@@ -2454,7 +2486,7 @@
             if (this.propsFrame) return;
             this.propsFrame = requestAnimationFrame(() => {
               this.propsFrame = 0;
-              this.renderProps();
+              this.syncProps();
               this.commands();
             });
           }
@@ -2463,9 +2495,31 @@
             cancelAnimationFrame(this.propsFrame);
             this.propsFrame = 0;
           }
+          propsSignature() {
+            return `${this.current.id}|${this.sel.join(",")}`;
+          }
+          // ドラッグ中やプロパティ入力後にパネルを作り直すと、開閉した
+          // セクションが元に戻り、入力欄のフォーカスも失われる。対象の
+          // 顔ぶれが変わっていない間は、表示中の値だけを更新する。
+          syncProps() {
+            if (this.propsSignature() !== this.propSignature) {
+              this.renderProps();
+              return;
+            }
+            for (const entry of this.propInputs) {
+              if (entry.input.isConnected) this.applyFieldValue(entry);
+            }
+          }
+          applyFieldValue({ input, path, type, objects }) {
+            const value = this.get(objects[0], path);
+            if (type === "checkbox") input.checked = Boolean(value);
+            else input.value = value ?? "";
+          }
           renderProps() {
             const panel = $("#props");
             panel.textContent = "";
+            this.propInputs = [];
+            this.propSignature = this.propsSignature();
             const objects = this.current.objects.filter((object) =>
               this.sel.includes(object.id),
             );
@@ -2547,13 +2601,21 @@
               input.type = type;
               if (type === "number") input.step = "any";
             }
-            const value = this.get(objects[0], path);
-            if (type === "checkbox") input.checked = Boolean(value);
-            else input.value = value ?? "";
+            const entry = { input, path, type, objects };
+            this.applyFieldValue(entry);
+            this.propInputs.push(entry);
             if (type === "readonly") {
               input.tabIndex = -1;
             } else {
               input.onchange = () => {
+                // 数値欄を空にしたまま確定した場合、Number("") は 0 になり
+                // 幅は 20px、透明度は 0 まで潰れてオブジェクトが消えたように
+                // 見える。入力し直す前に欄外をクリックしただけで壊れないよう、
+                // 空欄は変更なしとして元の値へ戻す。
+                if (type === "number" && !input.value.trim()) {
+                  this.applyFieldValue(entry);
+                  return;
+                }
                 const safe = this.safeValue(path, type, input);
                 // onchange can still fire after a value was changed and then put
                 // back to its original value. Do not insert an empty Undo step;
@@ -2569,7 +2631,12 @@
                   this.set(object, path, safe);
                   Object.assign(object, this.normalizeObject(object));
                 }
-                this.renderAll();
+                // プロパティ欄の項目構成は値の変更では変わらない。作り直すと
+                // Tab で次の欄へ進めず、連続した数値入力ができなくなるため、
+                // キャンバスと表示値だけを更新する。
+                this.renderCanvas();
+                this.syncProps();
+                this.commands();
                 this.dirty();
               };
             }
@@ -2861,8 +2928,11 @@
               const object = copy(source);
               object.id = uid();
               object.name = `${object.name} コピー`;
-              object.x += 30;
-              object.y += 30;
+              // 貼り付けと Ctrl+D を繰り返すと 30px ずつずれ続ける。
+              // 補正しないとコピーがキャンバス外へ出て見えなくなるため、
+              // 他の移動操作と同じ範囲へ収める。
+              object.x = clamp(object.x + 30, -object.w + 20, W - 20, object.x);
+              object.y = clamp(object.y + 30, -object.h + 20, H - 20, object.y);
               ids.push(object.id);
               this.current.objects.push(object);
             }
