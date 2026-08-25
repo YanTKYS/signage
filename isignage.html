@@ -878,13 +878,6 @@
               req.onerror = () => resolve();
             });
           }
-          keys(name) {
-            return new Promise((resolve) => {
-              const req = this.store(name).getAllKeys();
-              req.onsuccess = () => resolve(req.result || []);
-              req.onerror = () => resolve([]);
-            });
-          }
         }
         class MediaSession {
           constructor(app, container, object, sceneId) {
@@ -895,6 +888,9 @@
             this.files = [];
             this.index = -1;
             this.lastRandom = -1;
+            // 読み込みに失敗したファイルは、ファイル一覧の自動更新に成功する
+            // まで再生候補へ戻さない。周回ごとに戻すと壊れたファイルで毎回
+            // 待たされ、全ファイルが壊れている場合は再試行が終わらない。
             this.failed = new Set();
             this.played = new Set();
             this.switchTimer = null;
@@ -971,9 +967,6 @@
               const playable = this.files
                 .map((_, index) => index)
                 .filter((index) => !this.failed.has(index));
-              // 失敗したファイルを周回開始時に候補へ戻すと、全ファイルが
-              // 壊れている場合に再試行が永久に続く。失敗記録はファイル一覧が
-              // 更新されるまで保持し、再生可能な候補が尽きたことを通知する。
               if (!playable.length) return null;
               let candidates = playable.filter(
                 (index) => !this.played.has(index),
@@ -998,9 +991,6 @@
               if (nextIndex >= this.files.length) {
                 if (!this.object.repeat) return null;
                 nextIndex = 0;
-                // 読み込みに失敗した項目は、一覧の自動更新に成功するまで
-                // 候補へ戻さない。周回ごとに戻すと、壊れたファイルで毎回
-                // 待たされ、正常なファイルだけの連続表示を妨げてしまう。
               }
               this.index = nextIndex;
               if (!this.failed.has(nextIndex)) return nextIndex;
@@ -1037,9 +1027,8 @@
             if (isVideo) {
               media.autoplay = true;
               media.muted = Boolean(this.object.muted);
-              // 実際に読み込めたときだけ失敗記録を消す。
-              // 表示開始時に消すと、全ファイルが壊れていても
-              // 失敗件数が溜まらず再生不能の案内へ到達できない。
+              // 失敗記録は実際に読み込めたときだけ消す。表示開始時に消すと、
+              // 全ファイルが壊れていても再生不能の案内へ到達できない。
               media.onloadeddata = () => this.failed.delete(index);
               media.onended = () => this.next();
               this.app.playVideo(media, () => this.fail(index, media));
@@ -2166,10 +2155,9 @@
             try {
               await media.play();
             } catch (error) {
-              // 音声付き自動再生だけがブラウザに拒否された場合、正常な動画を
-              // 壊れたファイルとして除外したり、黒画面のまま止めたりしない。
-              // 表示セッション中だけミュートへフォールバックし、設定値自体は
-              // 変更しないため、次回はブラウザ側で許可されれば音声を再試行する。
+              // 音声付き自動再生だけが拒否された場合、正常な動画を壊れた
+              // ファイルとして除外せず、その表示セッションに限りミュートで
+              // 再試行する。設定値は変えないので次回は再び音声付きで試す。
               if (
                 error?.name === "NotAllowedError" &&
                 !media.muted &&
@@ -2240,9 +2228,8 @@
                 ? this.sel.filter((id) => id !== object.id)
                 : [...this.sel, object.id];
             else if (!this.sel.includes(object.id)) this.sel = [object.id];
-            // 選択済みのオブジェクトを掴み直しただけでキャンバスを作り直すと、
-            // 表示中の画像と動画がすべて読み込み直され、動画は先頭へ戻る。
-            // 選択が実際に変わったときだけ再描画する。
+            // 掴み直しただけで再描画すると、表示中の画像と動画がすべて
+            // 読み込み直され、動画は先頭へ戻ってしまう。
             if (this.sel.join(",") !== before) this.renderAll();
             // Ctrl+クリックで選択を外したオブジェクトを、そのままドラッグ
             // しても空の移動操作として履歴へ記録しない。
@@ -2379,9 +2366,8 @@
             // canvas/size boundary, or return to its exact starting position.
             // move() has saved the pre-drag snapshot by this point, so discard
             // that empty history entry instead of making Undo appear to fail.
-            // move() が対象の DOM を更新済みなので、キャンバスを作り直す
-            // 必要はない。作り直すと画像と動画が読み込み直され、移動の度に
-            // 表示がちらついて動画は先頭へ戻ってしまう。
+            // move() already updated the DOM, so do not re-render the canvas:
+            // that would reload every image and video and restart the videos.
             if (!changed) {
               this.undoStack.pop();
               this.syncProps();
@@ -2444,7 +2430,6 @@
               });
             const selected = new Set(this.range.base);
             for (const object of this.current.objects) {
-              // Hidden objects have no selectable area on the canvas.
               if (!object.visible) continue;
               const hit = !(
                 right < object.x ||
@@ -2608,10 +2593,9 @@
               input.tabIndex = -1;
             } else {
               input.onchange = () => {
-                // 数値欄を空にしたまま確定した場合、Number("") は 0 になり
-                // 幅は 20px、透明度は 0 まで潰れてオブジェクトが消えたように
-                // 見える。入力し直す前に欄外をクリックしただけで壊れないよう、
-                // 空欄は変更なしとして元の値へ戻す。
+                // Number("") は 0 になり、幅は 20px、透明度は 0 まで潰れて
+                // オブジェクトが消えたように見える。入力し直す前に欄外を
+                // クリックしただけで壊れないよう、空欄は元の値へ戻す。
                 if (type === "number" && !input.value.trim()) {
                   this.applyFieldValue(entry);
                   return;
@@ -2847,7 +2831,6 @@
               this.renderAll();
               return;
             }
-            // 表示モード中は編集ショートカットを受け付けない。
             if (this.viewing) return;
             if (
               ["INPUT", "TEXTAREA", "SELECT"].includes(
@@ -2878,9 +2861,6 @@
               event.preventDefault();
             }
             if (commandKey && key === "z") {
-              // Ctrl/Cmd+Shift+Z is the standard Redo shortcut. Previously it
-              // matched the plain Ctrl+Z branch and unexpectedly undid another
-              // operation instead.
               if (event.shiftKey) this.redo();
               else this.undo();
               event.preventDefault();
@@ -2928,9 +2908,8 @@
               const object = copy(source);
               object.id = uid();
               object.name = `${object.name} コピー`;
-              // 貼り付けと Ctrl+D を繰り返すと 30px ずつずれ続ける。
-              // 補正しないとコピーがキャンバス外へ出て見えなくなるため、
-              // 他の移動操作と同じ範囲へ収める。
+              // 貼り付けと Ctrl+D を繰り返すと 30px ずつずれ続ける。補正
+              // しないとコピーがキャンバス外へ出て見えなくなる。
               object.x = clamp(object.x + 30, -object.w + 20, W - 20, object.x);
               object.y = clamp(object.y + 30, -object.h + 20, H - 20, object.y);
               ids.push(object.id);
@@ -3209,9 +3188,8 @@
             this.dirty();
           }
           async startView() {
-            // 保存処理中のダブルクリックでも表示セッションを二重に作らない。
             // 二重起動すると先行セッションのメディアやタイマーを後続の描画が
-            // 破棄し、再生開始直後に表示が止まることがある。
+            // 破棄し、再生開始直後に表示が止まる。
             if (this.viewing || this.startingView || this.stopping) return;
             this.startingView = true;
             try {
@@ -3374,36 +3352,6 @@
           updateClocks() {
             for (const el of document.querySelectorAll(".clock-text")) {
               el.textContent = this.clockText(el.dataset.format);
-            }
-          }
-          folderIdInUse(folderId, exceptObjectId = null) {
-            // Undo/Redo履歴が残っている通常操作中はハンドル削除に使わない。
-            // 履歴破棄後の明示的な整理処理を追加する場合のために残している。
-            if (!folderId) {
-              return false;
-            }
-            return this.state.scenes.some((scene) => {
-              return scene.objects.some((object) => {
-                return (
-                  object.type === "player" &&
-                  object.folderId === folderId &&
-                  object.id !== exceptObjectId
-                );
-              });
-            });
-          }
-          async deleteHandleIfUnused(folderId, exceptObjectId = null) {
-            if (!folderId || this.folderIdInUse(folderId, exceptObjectId)) {
-              return;
-            }
-            await this.db.delete(HANDLES, folderId);
-          }
-          async cleanupUnusedHandles() {
-            const keys = await this.db.keys(HANDLES);
-            for (const folderId of keys) {
-              if (!this.folderIdInUse(folderId)) {
-                await this.db.delete(HANDLES, folderId);
-              }
             }
           }
           async resetDoc(message) {
