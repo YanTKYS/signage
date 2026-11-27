@@ -86,3 +86,11 @@ macOS では `Ctrl` の代わりに `Command` も利用できます。貼り付�
 ## GitHub Pages への公開
 
 `main` ブランチの `isignage.html` を更新すると、GitHub Actions が同ファイルを `index.html` として GitHub Pages へ公開します。Actions の手動実行にも対応しています。リポジトリで Pages が未有効の場合は、`PAGES_TOKEN` シークレットへ Pages を有効化できる Personal Access Token を設定してください。
+
+## ライセンス
+
+iSignage（`isignage.html` および本リポジトリのドキュメント）は [MIT License](LICENSE) で公開しています。Copyright (c) 2026 YanTKYS
+
+- `isignage.html` 単体で配布・利用される場合に備え、同ファイルの先頭 HTML コメントにも MIT License の全文を記載しています。
+- 本ソフトウェアは外部ライブラリ・CDN・外部フォントを含まず、第三者のコードや素材は同梱していません。
+- 利用者がこのツールで読み込む・作成する画像、動画、その他のメディアやデータ（JSON バックアップを含む）は、この License の対象に含まれません。それらの権利は各権利者に帰属します。
